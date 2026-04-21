@@ -30,12 +30,17 @@ Globals:
 
 Resources:
   # ─── S3 Bucket (task store) ───────────────────────────────────────────────────
+  # EventBridgeEnabled: true routes all S3 events to the default event bus,
+  # where the S3TaskChangeRule below filters to tasks/*.json changes only.
   TasksBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "routineweave-tasks-${Environment}-${AWS::AccountId}"
       VersioningConfiguration:
         Status: Enabled
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
       LifecycleConfiguration:
         Rules:
           - Id: ExpireOldVersions
@@ -102,6 +107,14 @@ Resources:
                 Resource: !Ref RoutineWeaveNotificationTopic
               - Effect: Allow
                 Action:
+                  - events:PutRule
+                  - events:PutTargets
+                  - events:DeleteRule
+                  - events:RemoveTargets
+                  - events:DescribeRule
+                Resource: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/routineweave-task-*"
+              - Effect: Allow
+                Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
@@ -117,6 +130,8 @@ Resources:
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/routineweave/*"
 
   # ─── Scheduler Lambda ─────────────────────────────────────────────────────────
+  # No longer has a generic hourly trigger — each task gets its own
+  # per-task EventBridge rule created by the Registrar Lambda.
   RoutineWeaveSchedulerFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -125,20 +140,73 @@ Resources:
       CodeUri: ../
       Role: !GetAtt RoutineWeaveLambdaRole.Arn
       Timeout: 300
-      Description: Loads tasks from S3, runs Gemini prompts, publishes results to SNS
-      ReservedConcurrentExecutions: 5
-      Events:
-        HourlyTrigger:
-          Type: Schedule
-          Properties:
-            Schedule: "rate(1 hour)"
-            Name: !Sub "routineweave-hourly-${Environment}"
-            Description: Hourly EventBridge trigger for RoutineWeave scheduler
-            Enabled: true
-            Input: '{"source": "aws.events", "detail-type": "Scheduled Event"}'
+      Description: Runs a specific Gemini task and publishes result to SNS
+      ReservedConcurrentExecutions: 10
       Tags:
         Project: RoutineWeave
         Environment: !Ref Environment
+
+  # Allow any EventBridge rule matching routineweave-task-* to invoke the scheduler
+  SchedulerCronPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt RoutineWeaveSchedulerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/routineweave-task-*"
+
+  # ─── Registrar Lambda ─────────────────────────────────────────────────────────
+  # Triggered by S3 Object Created/Deleted events (EventBridge 1).
+  # Creates or deletes a per-task EventBridge cron rule (EventBridge 2).
+  RoutineWeaveRegistrarFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "routineweave-registrar-${Environment}"
+      Handler: dist/registrar.handler
+      CodeUri: ../
+      Role: !GetAtt RoutineWeaveLambdaRole.Arn
+      Timeout: 30
+      Description: Manages per-task EventBridge cron rules in response to S3 task changes
+      Environment:
+        Variables:
+          SCHEDULER_LAMBDA_ARN: !GetAtt RoutineWeaveSchedulerFunction.Arn
+      Tags:
+        Project: RoutineWeave
+        Environment: !Ref Environment
+
+  # Allow the S3TaskChangeRule to invoke the Registrar
+  RegistrarInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt RoutineWeaveRegistrarFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3TaskChangeRule.Arn
+
+  # ─── EventBridge 1: S3 task changes → Registrar ───────────────────────────────
+  # Matches Object Created / Object Deleted on the tasks/ prefix.
+  S3TaskChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "routineweave-s3-task-change-${Environment}"
+      Description: Fires when a task JSON is created or deleted in the S3 task store
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+          - Object Deleted
+        detail:
+          bucket:
+            name:
+              - !Ref TasksBucket
+          object:
+            key:
+              - prefix: "tasks/"
+      Targets:
+        - Id: RegistrarTarget
+          Arn: !GetAtt RoutineWeaveRegistrarFunction.Arn
 
   # ─── API Lambda ───────────────────────────────────────────────────────────────
   RoutineWeaveApiFunction:
@@ -202,6 +270,12 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/routineweave-scheduler-${Environment}"
       RetentionInDays: 30
 
+  RegistrarLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/routineweave-registrar-${Environment}"
+      RetentionInDays: 30
+
   ApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -213,7 +287,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "routineweave-errors-${Environment}"
-      AlarmDescription: Alert when RoutineWeave Lambda errors exceed threshold
+      AlarmDescription: Alert when RoutineWeave scheduler errors exceed threshold
       MetricName: Errors
       Namespace: AWS/Lambda
       Dimensions:
@@ -246,6 +320,12 @@ Outputs:
     Value: !GetAtt RoutineWeaveSchedulerFunction.Arn
     Export:
       Name: !Sub "${AWS::StackName}-SchedulerArn"
+
+  RegistrarFunctionArn:
+    Description: Registrar Lambda ARN
+    Value: !GetAtt RoutineWeaveRegistrarFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RegistrarArn"
 
   SnsTopicArn:
     Description: SNS topic ARN for notifications
