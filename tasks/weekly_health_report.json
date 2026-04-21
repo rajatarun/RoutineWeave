@@ -1,0 +1,12 @@
+{
+  "task_name": "weekly_health_report",
+  "schedule": "0 9 * * 1",
+  "prompt": "Today is {{current_date}} (Monday). Generate a comprehensive weekly system health and engineering hygiene report template. Include the following sections:\n\n## 🔍 Infrastructure Health Checklist\n- List 5 critical infrastructure metrics to review\n- List 3 security hygiene tasks\n\n## 📊 Performance Benchmarks\n- List key performance indicators a backend team should track weekly\n\n## 🐛 Incident Review Template\n- Provide a structured template for reviewing any incidents from the past week\n\n## 🚀 Deployment Health\n- List items to verify about last week's deployments\n\n## 📅 Week Ahead Priorities\n- Suggest a framework for setting engineering priorities for the week\n\nFormat with clear headers and bullet points. Keep each section concise and actionable.",
+  "model": "gemini-1.5-pro",
+  "enabled": true,
+  "timeout_ms": 90000,
+  "output": {
+    "type": "sns",
+    "sns_topic_arn": "arn:aws:sns:us-east-1:239571291755:routineweave-notifications"
+  }
+}

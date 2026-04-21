@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+.env.production
+*.js.map
+.aws-sam/
+samconfig.toml
+*.log
