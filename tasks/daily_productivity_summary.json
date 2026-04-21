@@ -10,7 +10,6 @@
     "ceremonies": ["sprint planning", "retrospective"]
   },
   "output": {
-    "type": "sns",
-    "sns_topic_arn": "arn:aws:sns:us-east-1:239571291755:routineweave-notifications"
+    "type": "sns"
   }
 }
