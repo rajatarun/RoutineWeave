@@ -19,8 +19,13 @@ export class ExecutionEngine {
     logger.info(`Executing task: ${task.task_name}`, { model: task.model });
 
     try {
-      const variables = this.renderer.injectDefaults(task.variables);
-      const renderedPrompt = this.renderer.render(task.prompt, variables);
+      // Merge: system defaults < variables (strings) < input (strings or arrays)
+      // input values take highest precedence and may be lists (JSON.stringify'd on injection)
+      const merged = {
+        ...this.renderer.injectDefaults(task.variables),
+        ...(task.input ?? {}),
+      };
+      const renderedPrompt = this.renderer.render(task.prompt, merged);
 
       logger.debug(`Rendered prompt for ${task.task_name}`, {
         promptLength: renderedPrompt.length,

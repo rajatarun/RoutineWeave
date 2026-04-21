@@ -1,11 +1,15 @@
 {
   "task_name": "ai_news_digest",
   "schedule": "0 */6 * * *",
-  "prompt": "Today is {{current_date}}. You are an AI analyst. Provide a concise digest of the most important AI and machine learning developments from the past 6 hours. Format your response as exactly 5 bullet points, each starting with '•'. Focus on: model releases, research breakthroughs, industry news, and regulatory updates. Be specific and factual.",
+  "prompt": "Today is {{current_date}}. You are an AI analyst. Provide a concise digest of the most important developments from the past 6 hours across these topics: {{topics}}. Format your response as exactly 5 bullet points, each starting with '•'. Focus on the areas listed in topics. Source region: {{region}}. Be specific and factual.",
   "model": "gemini-3.1-flash-lite-preview",
   "grounding": true,
   "enabled": true,
   "timeout_ms": 60000,
+  "input": {
+    "topics": ["model releases", "research breakthroughs", "industry news", "regulatory updates"],
+    "region": "global"
+  },
   "output": {
     "type": "sns",
     "sns_topic_arn": "arn:aws:sns:us-east-1:239571291755:routineweave-notifications"
