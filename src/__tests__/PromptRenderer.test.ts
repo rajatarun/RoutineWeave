@@ -43,3 +43,43 @@ describe("PromptRenderer", () => {
     expect(defaults.current_date).toBe("custom-date");
   });
 });
+
+describe("PromptRenderer — array input values", () => {
+  let renderer: PromptRenderer;
+
+  beforeEach(() => {
+    renderer = new PromptRenderer();
+  });
+
+  it("stringifies array values via JSON.stringify", () => {
+    const result = renderer.render("Topics: {{topics}}", {
+      topics: ["AI", "ML", "robotics"],
+    });
+    expect(result).toBe('Topics: ["AI","ML","robotics"]');
+  });
+
+  it("handles mixed string and array inputs in one template", () => {
+    const result = renderer.render("On {{date}}, focus on {{tags}}", {
+      date: "2024-01-15",
+      tags: ["news", "research"],
+    });
+    expect(result).toBe('On 2024-01-15, focus on ["news","research"]');
+  });
+
+  it("handles empty array", () => {
+    const result = renderer.render("Items: {{list}}", { list: [] });
+    expect(result).toBe("Items: []");
+  });
+
+  it("handles single-element array", () => {
+    const result = renderer.render("Tag: {{t}}", { t: ["only"] });
+    expect(result).toBe('Tag: ["only"]');
+  });
+
+  it("input values override variables of the same key", () => {
+    const base = renderer.injectDefaults({ greeting: "hello" });
+    const merged = { ...base, greeting: ["hi", "hey"] };
+    const result = renderer.render("{{greeting}}", merged);
+    expect(result).toBe('["hi","hey"]');
+  });
+});

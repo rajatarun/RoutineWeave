@@ -23,6 +23,10 @@ export const OutputConfigSchema = z.discriminatedUnion("type", [
   WebhookOutputSchema,
 ]);
 
+// A single input value: plain string or a list that gets JSON.stringify'd into the prompt
+export const InputValueSchema = z.union([z.string(), z.array(z.string())]);
+export type InputValue = z.infer<typeof InputValueSchema>;
+
 export const TaskDefinitionSchema = z.object({
   task_name: z.string().min(1).regex(/^[a-z0-9_]+$/, "task_name must be lowercase alphanumeric with underscores"),
   schedule: z.string().min(1),
@@ -30,6 +34,8 @@ export const TaskDefinitionSchema = z.object({
   model: z.string().default("gemini-3.1-flash-lite-preview"),
   grounding: z.boolean().default(false),
   variables: z.record(z.string()).optional(),
+  // input values can be strings or arrays; arrays are JSON.stringify'd before injection
+  input: z.record(InputValueSchema).optional(),
   output: OutputConfigSchema,
   enabled: z.boolean().default(true),
   timeout_ms: z.number().int().min(1000).max(300_000).default(60_000),
