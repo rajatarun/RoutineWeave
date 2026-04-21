@@ -261,8 +261,7 @@ Resources:
       Description: RoutineWeave task management API
       CorsConfiguration:
         AllowOrigins:
-          - "https://tarunraja.info"
-          - "https://www.tarunraja.info"
+          - "*"
         AllowHeaders:
           - Content-Type
           - Authorization
