@@ -1,8 +1,7 @@
 import { Context } from "aws-lambda";
-import { TaskLoader } from "./scheduler/TaskLoader";
+import { S3TaskStore } from "./storage/S3TaskStore";
 import { Orchestrator } from "./orchestrator";
 import { logger } from "./utils";
-import { env } from "./config";
 
 interface EventBridgeEvent {
   source?: string;
@@ -12,30 +11,30 @@ interface EventBridgeEvent {
   };
 }
 
-const taskLoader = new TaskLoader(env.TASKS_DIR);
+const store = new S3TaskStore();
 const orchestrator = new Orchestrator();
 
 export async function handler(event: EventBridgeEvent, context: Context): Promise<void> {
-  logger.info("Lambda invoked", {
+  logger.info("Scheduler Lambda invoked", {
     requestId: context.awsRequestId,
     remainingMs: context.getRemainingTimeInMillis(),
     source: event.source,
     detailType: event["detail-type"],
   });
 
-  const tasks = taskLoader.loadAll().filter((t) => t.enabled);
+  const allTasks = await store.list();
+  const tasks = allTasks.filter((t) => t.enabled);
 
   if (tasks.length === 0) {
-    logger.warn("No enabled tasks found");
+    logger.warn("No enabled tasks found in S3");
     return;
   }
 
-  // If EventBridge passes a specific task name in detail, run only that task
   const targetTaskName = event.detail?.task_name;
   const tasksToRun = targetTaskName ? tasks.filter((t) => t.task_name === targetTaskName) : tasks;
 
   if (targetTaskName && tasksToRun.length === 0) {
-    logger.warn(`No task found with name: ${targetTaskName}`);
+    logger.warn(`No enabled task found with name: ${targetTaskName}`);
     return;
   }
 
@@ -44,7 +43,7 @@ export async function handler(event: EventBridgeEvent, context: Context): Promis
   const succeeded = results.filter((r) => r.success).length;
   const failed = results.filter((r) => !r.success).length;
 
-  logger.info("Lambda execution complete", {
+  logger.info("Scheduler execution complete", {
     total: results.length,
     succeeded,
     failed,
