@@ -23,6 +23,14 @@
       "Resource": "arn:aws:logs:*:239571291755:log-group:/aws/lambda/routineweave-*"
     },
     {
+      "Sid": "SecretsManagerGeminiKey",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:239571291755:secret:gemini/api_key*"
+    },
+    {
       "Sid": "SSMParameterRead",
       "Effect": "Allow",
       "Action": [

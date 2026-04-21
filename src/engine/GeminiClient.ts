@@ -1,4 +1,5 @@
 import { GoogleGenAI, Tool, GenerateContentConfig } from "@google/genai";
+import { getGeminiApiKey } from "../config";
 import { withRetry } from "../utils";
 import { env } from "../config";
 
@@ -20,15 +21,20 @@ export interface GeminiResponse {
 const GROUNDING_TOOL: Tool = { googleSearch: {} };
 
 export class GeminiClient {
-  private ai: GoogleGenAI;
+  private ai: GoogleGenAI | null = null;
 
-  constructor(apiKey: string = env.GEMINI_API_KEY) {
-    this.ai = new GoogleGenAI({ apiKey });
+  private async getAI(): Promise<GoogleGenAI> {
+    if (!this.ai) {
+      const apiKey = await getGeminiApiKey();
+      this.ai = new GoogleGenAI({ apiKey });
+    }
+    return this.ai;
   }
 
   async generate(request: GeminiRequest): Promise<GeminiResponse> {
     return withRetry(
       async () => {
+        const ai = await this.getAI();
         const tools: Tool[] = request.grounding ? [GROUNDING_TOOL] : [];
 
         const config: GenerateContentConfig = {
@@ -36,7 +42,7 @@ export class GeminiClient {
           ...(tools.length > 0 ? { tools } : {}),
         };
 
-        const response = await this.ai.models.generateContent({
+        const response = await ai.models.generateContent({
           model: request.model,
           contents: request.prompt,
           config,

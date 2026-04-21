@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const EnvSchema = z.object({
-  GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
+  GEMINI_API_KEY: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),
   SNS_TOPIC_ARN: z.string().min(1, "SNS_TOPIC_ARN is required"),
   AWS_ACCESS_KEY_ID: z.string().optional(),
