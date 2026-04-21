@@ -97,6 +97,11 @@ jobs:
         with:
           name: routineweave-build
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -110,7 +115,8 @@ jobs:
           use-installer: true
 
       - name: SAM Build
-        run: sam build --template aws/template.yaml --use-container
+        timeout-minutes: 5
+        run: sam build --template aws/template.yaml
 
       - name: SAM Deploy
         run: |
@@ -121,8 +127,6 @@ jobs:
             --no-fail-on-empty-changeset \
             --parameter-overrides \
               Environment=${{ env.ENVIRONMENT }} \
-              GeminiApiKey=${{ secrets.GEMINI_API_KEY }} \
-              SnsTopicArn=${{ secrets.SNS_TOPIC_ARN }} \
               LogLevel=info \
             --tags \
               Project=RoutineWeave \

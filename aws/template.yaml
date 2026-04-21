@@ -9,15 +9,6 @@ Parameters:
     Default: production
     AllowedValues: [production, staging]
 
-  GeminiApiKey:
-    Type: String
-    NoEcho: true
-    Description: Google Gemini API key (store in SSM Parameter Store in production)
-
-  SnsTopicArn:
-    Type: String
-    Description: ARN of the SNS topic for notifications
-
   LogLevel:
     Type: String
     Default: info
@@ -27,26 +18,56 @@ Globals:
   Function:
     Runtime: nodejs20.x
     Architectures: [arm64]
-    Timeout: 300
     MemorySize: 256
     Environment:
       Variables:
         NODE_ENV: !Ref Environment
         LOG_LEVEL: !Ref LogLevel
         AWS_REGION_NAME: !Ref AWS::Region
-        SNS_TOPIC_ARN: !Ref SnsTopicArn
-        GEMINI_API_KEY: !Ref GeminiApiKey
-        TASKS_DIR: /var/task/tasks
+        SNS_TOPIC_ARN: !Ref RoutineWeaveNotificationTopic
+        TASKS_BUCKET: !Ref TasksBucket
+        TASKS_S3_PREFIX: "tasks/"
 
 Resources:
-  # ─── SNS Topic ────────────────────────────────────────────────────────────────
+  # ─── S3 Bucket (task store) ───────────────────────────────────────────────────
+  TasksBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "routineweave-tasks-${Environment}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: RoutineWeave
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ─── SNS Topic + Email Subscription ──────────────────────────────────────────
   RoutineWeaveNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub "routineweave-notifications-${Environment}"
       DisplayName: RoutineWeave Notifications
 
-  # ─── IAM Role ─────────────────────────────────────────────────────────────────
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref RoutineWeaveNotificationTopic
+      Protocol: email
+      Endpoint: rajatarun12@gmail.com
+
+  # ─── Shared IAM Role ──────────────────────────────────────────────────────────
   RoutineWeaveLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -67,9 +88,18 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt TasksBucket.Arn
+                  - !Sub "${TasksBucket.Arn}/*"
+              - Effect: Allow
+                Action:
                   - sns:Publish
                   - sns:Subscribe
-                Resource: !Ref SnsTopicArn
+                Resource: !Ref RoutineWeaveNotificationTopic
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -78,42 +108,107 @@ Resources:
                 Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/routineweave-*"
               - Effect: Allow
                 Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:gemini/api_key*"
+              - Effect: Allow
+                Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/routineweave/*"
 
-  # ─── Lambda Function ──────────────────────────────────────────────────────────
-  RoutineWeaveFunction:
+  # ─── Scheduler Lambda ─────────────────────────────────────────────────────────
+  RoutineWeaveSchedulerFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "routineweave-scheduler-${Environment}"
       Handler: dist/lambda.handler
       CodeUri: ../
       Role: !GetAtt RoutineWeaveLambdaRole.Arn
-      Description: RoutineWeave AI-powered scheduled task executor
+      Timeout: 300
+      Description: Loads tasks from S3, runs Gemini prompts, publishes results to SNS
       ReservedConcurrentExecutions: 5
       Events:
-        # Trigger every hour to check and run due tasks
         HourlyTrigger:
           Type: Schedule
           Properties:
             Schedule: "rate(1 hour)"
             Name: !Sub "routineweave-hourly-${Environment}"
-            Description: Hourly trigger for RoutineWeave task scheduler
+            Description: Hourly EventBridge trigger for RoutineWeave scheduler
             Enabled: true
             Input: '{"source": "aws.events", "detail-type": "Scheduled Event"}'
       Tags:
         Project: RoutineWeave
         Environment: !Ref Environment
 
-  # ─── CloudWatch Log Group ─────────────────────────────────────────────────────
-  RoutineWeaveLogGroup:
+  # ─── API Lambda ───────────────────────────────────────────────────────────────
+  RoutineWeaveApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "routineweave-api-${Environment}"
+      Handler: dist/api.handler
+      CodeUri: ../
+      Role: !GetAtt RoutineWeaveLambdaRole.Arn
+      Timeout: 30
+      Description: HTTP API for managing RoutineWeave task definitions in S3
+      Events:
+        ListTasks:
+          Type: HttpApi
+          Properties:
+            Path: /tasks
+            Method: GET
+            ApiId: !Ref RoutineWeaveHttpApi
+        CreateTask:
+          Type: HttpApi
+          Properties:
+            Path: /tasks
+            Method: POST
+            ApiId: !Ref RoutineWeaveHttpApi
+        GetTask:
+          Type: HttpApi
+          Properties:
+            Path: /tasks/{taskName}
+            Method: GET
+            ApiId: !Ref RoutineWeaveHttpApi
+        UpdateTask:
+          Type: HttpApi
+          Properties:
+            Path: /tasks/{taskName}
+            Method: PUT
+            ApiId: !Ref RoutineWeaveHttpApi
+        DeleteTask:
+          Type: HttpApi
+          Properties:
+            Path: /tasks/{taskName}
+            Method: DELETE
+            ApiId: !Ref RoutineWeaveHttpApi
+      Tags:
+        Project: RoutineWeave
+        Environment: !Ref Environment
+
+  # ─── HTTP API (API Gateway v2) ────────────────────────────────────────────────
+  RoutineWeaveHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      Description: RoutineWeave task management API
+      Tags:
+        Project: RoutineWeave
+        Environment: !Ref Environment
+
+  # ─── CloudWatch Log Groups ────────────────────────────────────────────────────
+  SchedulerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/routineweave-scheduler-${Environment}"
       RetentionInDays: 30
 
-  # ─── CloudWatch Alarms ────────────────────────────────────────────────────────
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/routineweave-api-${Environment}"
+      RetentionInDays: 30
+
+  # ─── CloudWatch Alarm ─────────────────────────────────────────────────────────
   RoutineWeaveErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -123,7 +218,7 @@ Resources:
       Namespace: AWS/Lambda
       Dimensions:
         - Name: FunctionName
-          Value: !Ref RoutineWeaveFunction
+          Value: !Ref RoutineWeaveSchedulerFunction
       Statistic: Sum
       Period: 3600
       EvaluationPeriods: 1
@@ -134,18 +229,26 @@ Resources:
       TreatMissingData: notBreaching
 
 Outputs:
-  LambdaFunctionArn:
-    Description: Lambda function ARN
-    Value: !GetAtt RoutineWeaveFunction.Arn
+  TasksBucketName:
+    Description: S3 bucket for task definitions
+    Value: !Ref TasksBucket
     Export:
-      Name: !Sub "${AWS::StackName}-LambdaArn"
+      Name: !Sub "${AWS::StackName}-TasksBucket"
+
+  ApiUrl:
+    Description: HTTP API base URL
+    Value: !Sub "https://${RoutineWeaveHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiUrl"
+
+  SchedulerFunctionArn:
+    Description: Scheduler Lambda ARN
+    Value: !GetAtt RoutineWeaveSchedulerFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-SchedulerArn"
 
   SnsTopicArn:
     Description: SNS topic ARN for notifications
     Value: !Ref RoutineWeaveNotificationTopic
     Export:
       Name: !Sub "${AWS::StackName}-SnsTopicArn"
-
-  LogGroupName:
-    Description: CloudWatch log group name
-    Value: !Ref RoutineWeaveLogGroup
