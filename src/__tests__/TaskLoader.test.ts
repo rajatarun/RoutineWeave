@@ -62,6 +62,21 @@ describe("TaskLoader", () => {
     expect(() => loader.loadInline(invalid)).toThrow();
   });
 
+
+  it("accepts sns output without per-task topic ARN", () => {
+    const loader = new TaskLoader(tmpDir);
+    const taskWithoutTopic = {
+      ...validTask,
+      output: {
+        type: "sns" as const,
+      },
+    };
+
+    const task = loader.loadInline(taskWithoutTopic);
+    expect(task.output.type).toBe("sns");
+    expect((task.output as { sns_topic_arn?: string }).sns_topic_arn).toBeUndefined();
+  });
+
   it("applies enabled:true by default", () => {
     const loader = new TaskLoader(tmpDir);
     const task = loader.loadInline(validTask);
