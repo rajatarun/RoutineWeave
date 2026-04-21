@@ -2,7 +2,7 @@
   "task_name": "daily_productivity_summary",
   "schedule": "0 8 * * *",
   "prompt": "Today is {{current_date}}, a {{day_of_week}}. Generate a structured daily productivity plan optimized for a software engineering team. Include:\n\n1. **Morning Focus Block** (2 hours): Suggest 1-2 deep work tasks\n2. **Mid-Morning Sync** (30 min): Recommended standup agenda items\n3. **Afternoon Execution** (3 hours): Collaboration and review tasks\n4. **End-of-Day Review** (30 min): Reflection prompts and metrics to track\n\nTailor the advice for {{day_of_week}}. Keep it actionable and concise.",
-  "model": "gemini-1.5-pro",
+  "model": "gemini-3.1-flash-lite-preview",
   "enabled": true,
   "timeout_ms": 45000,
   "output": {
