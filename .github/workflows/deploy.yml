@@ -121,7 +121,6 @@ jobs:
             --no-fail-on-empty-changeset \
             --parameter-overrides \
               Environment=${{ env.ENVIRONMENT }} \
-              SnsTopicArn=${{ secrets.SNS_TOPIC_ARN }} \
               LogLevel=info \
             --tags \
               Project=RoutineWeave \
