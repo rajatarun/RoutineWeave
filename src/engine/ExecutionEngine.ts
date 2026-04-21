@@ -27,7 +27,7 @@ export class ExecutionEngine {
       });
 
       const response = await Promise.race([
-        this.gemini.generate({ model: task.model, prompt: renderedPrompt }),
+        this.gemini.generate({ model: task.model, prompt: renderedPrompt, grounding: task.grounding }),
         this.createTimeout(task.timeout_ms),
       ]);
 
@@ -35,6 +35,7 @@ export class ExecutionEngine {
 
       logger.info(`Task ${task.task_name} completed`, {
         duration_ms,
+        grounding: response.groundingUsed,
         promptTokens: response.promptTokens,
         outputTokens: response.outputTokens,
       });

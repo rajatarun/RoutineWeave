@@ -1,12 +1,12 @@
-import { GoogleGenerativeAI, GenerativeModel, GenerationConfig } from "@google/generative-ai";
+import { GoogleGenAI, Tool, GenerateContentConfig } from "@google/genai";
 import { withRetry } from "../utils";
 import { env } from "../config";
 
 export interface GeminiRequest {
   model: string;
   prompt: string;
-  timeoutMs?: number;
-  generationConfig?: GenerationConfig;
+  grounding?: boolean;
+  generationConfig?: Omit<GenerateContentConfig, "tools">;
 }
 
 export interface GeminiResponse {
@@ -14,38 +14,35 @@ export interface GeminiResponse {
   model: string;
   promptTokens?: number;
   outputTokens?: number;
+  groundingUsed: boolean;
 }
 
+const GROUNDING_TOOL: Tool = { googleSearch: {} };
+
 export class GeminiClient {
-  private genAI: GoogleGenerativeAI;
-  private modelCache = new Map<string, GenerativeModel>();
+  private ai: GoogleGenAI;
 
   constructor(apiKey: string = env.GEMINI_API_KEY) {
-    this.genAI = new GoogleGenerativeAI(apiKey);
-  }
-
-  private getModel(modelName: string): GenerativeModel {
-    if (!this.modelCache.has(modelName)) {
-      this.modelCache.set(modelName, this.genAI.getGenerativeModel({ model: modelName }));
-    }
-    return this.modelCache.get(modelName)!;
+    this.ai = new GoogleGenAI({ apiKey });
   }
 
   async generate(request: GeminiRequest): Promise<GeminiResponse> {
-    const model = this.getModel(request.model);
-
     return withRetry(
       async () => {
-        const result = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: request.prompt }] }],
-          generationConfig: request.generationConfig ?? {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-          },
+        const tools: Tool[] = request.grounding ? [GROUNDING_TOOL] : [];
+
+        const config: GenerateContentConfig = {
+          ...request.generationConfig,
+          ...(tools.length > 0 ? { tools } : {}),
+        };
+
+        const response = await this.ai.models.generateContent({
+          model: request.model,
+          contents: request.prompt,
+          config,
         });
 
-        const response = result.response;
-        const text = response.text();
+        const text = response.text;
 
         if (!text) {
           throw new Error("Gemini returned empty response");
@@ -56,6 +53,7 @@ export class GeminiClient {
           model: request.model,
           promptTokens: response.usageMetadata?.promptTokenCount,
           outputTokens: response.usageMetadata?.candidatesTokenCount,
+          groundingUsed: request.grounding ?? false,
         };
       },
       {
@@ -64,7 +62,6 @@ export class GeminiClient {
         shouldRetry: (error) => {
           if (error instanceof Error) {
             const msg = error.message.toLowerCase();
-            // Do not retry on auth or quota errors
             if (msg.includes("api key") || msg.includes("quota") || msg.includes("invalid argument")) {
               return false;
             }

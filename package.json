@@ -17,7 +17,7 @@
   "dependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.600.0",
     "@aws-sdk/client-sns": "^3.600.0",
-    "@google/generative-ai": "^0.15.0",
+    "@google/genai": "^1.50.1",
     "node-cron": "^3.0.3",
     "zod": "^3.23.8"
   },
