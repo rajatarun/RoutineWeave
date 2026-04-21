@@ -9,10 +9,6 @@ Parameters:
     Default: production
     AllowedValues: [production, staging]
 
-  SnsTopicArn:
-    Type: String
-    Description: ARN of the SNS topic for notifications
-
   LogLevel:
     Type: String
     Default: info
@@ -28,7 +24,7 @@ Globals:
         NODE_ENV: !Ref Environment
         LOG_LEVEL: !Ref LogLevel
         AWS_REGION_NAME: !Ref AWS::Region
-        SNS_TOPIC_ARN: !Ref SnsTopicArn
+        SNS_TOPIC_ARN: !Ref RoutineWeaveNotificationTopic
         TASKS_BUCKET: !Ref TasksBucket
         TASKS_S3_PREFIX: "tasks/"
 
@@ -57,12 +53,19 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # ─── SNS Topic ────────────────────────────────────────────────────────────────
+  # ─── SNS Topic + Email Subscription ──────────────────────────────────────────
   RoutineWeaveNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub "routineweave-notifications-${Environment}"
       DisplayName: RoutineWeave Notifications
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref RoutineWeaveNotificationTopic
+      Protocol: email
+      Endpoint: rajatarun12@gmail.com
 
   # ─── Shared IAM Role ──────────────────────────────────────────────────────────
   RoutineWeaveLambdaRole:
@@ -96,7 +99,7 @@ Resources:
                 Action:
                   - sns:Publish
                   - sns:Subscribe
-                Resource: !Ref SnsTopicArn
+                Resource: !Ref RoutineWeaveNotificationTopic
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
