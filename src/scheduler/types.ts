@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const SNSOutputSchema = z.object({
   type: z.literal("sns"),
-  sns_topic_arn: z.string().min(1).optional(),
+  sns_topic_arn: z.string().optional(),
 });
 
 export const SlackOutputSchema = z.object({
