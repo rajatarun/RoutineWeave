@@ -9,6 +9,8 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   TASKS_DIR: z.string().default("./tasks"),
+  TASKS_BUCKET: z.string().optional(),
+  TASKS_S3_PREFIX: z.string().default("tasks/"),
   MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
   RETRY_BASE_DELAY_MS: z.coerce.number().int().min(100).default(1000),
 });
