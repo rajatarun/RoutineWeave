@@ -259,6 +259,22 @@ Resources:
     Properties:
       StageName: !Ref Environment
       Description: RoutineWeave task management API
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Amz-Date
+          - X-Api-Key
+          - X-Amz-Security-Token
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        MaxAge: 86400
       Tags:
         Project: RoutineWeave
         Environment: !Ref Environment
