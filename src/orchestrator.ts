@@ -1,19 +1,23 @@
 import { TaskDefinition, TaskExecutionResult } from "./scheduler/types";
 import { ExecutionEngine } from "./engine/ExecutionEngine";
 import { GeminiClient } from "./engine/GeminiClient";
+import { NovaStructurer } from "./engine/NovaStructurer";
 import { PromptRenderer } from "./engine/PromptRenderer";
 import { OutputRouter } from "./output/OutputRouter";
+import { S3ResultStore } from "./storage/S3ResultStore";
 import { logger } from "./utils";
 
 export class Orchestrator {
   private engine: ExecutionEngine;
   private router: OutputRouter;
+  private structurer: NovaStructurer;
 
   constructor() {
     const gemini = new GeminiClient();
     const renderer = new PromptRenderer();
     this.engine = new ExecutionEngine(gemini, renderer);
     this.router = new OutputRouter();
+    this.structurer = new NovaStructurer();
   }
 
   async runTask(task: TaskDefinition): Promise<TaskExecutionResult> {
@@ -27,6 +31,27 @@ export class Orchestrator {
       logger.error(`[Orchestrator] Output routing failed for task: ${task.task_name}`, {
         error: routeError instanceof Error ? routeError.message : String(routeError),
       });
+    }
+
+    if (task.save_result) {
+      if (result.success && result.result) {
+        try {
+          result.structured_result = await this.structurer.structure(result.result);
+        } catch (structureError) {
+          logger.error(`[Orchestrator] Nova structuring failed for task: ${task.task_name}`, {
+            error: structureError instanceof Error ? structureError.message : String(structureError),
+          });
+        }
+      }
+
+      try {
+        const store = new S3ResultStore();
+        await store.save(result);
+      } catch (saveError) {
+        logger.error(`[Orchestrator] Result save failed for task: ${task.task_name}`, {
+          error: saveError instanceof Error ? saveError.message : String(saveError),
+        });
+      }
     }
 
     return result;
