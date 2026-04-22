@@ -159,7 +159,9 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:Converse
-                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/us.amazon.nova-2-lite-v1:0"
+                Resource:
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-2-lite-v1:0"
+                  - "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
