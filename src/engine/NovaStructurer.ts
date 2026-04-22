@@ -2,7 +2,7 @@ import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-r
 import { env } from "../config/environment";
 import { logger } from "../utils";
 
-const MODEL_ID = "amazon.nova-2-lite-v1:0";
+const MODEL_ID = "us.amazon.nova-2-lite-v1:0";
 
 const SYSTEM_PROMPT = `You are a JSON structuring assistant. Your only job is to convert raw AI task output text into a well-structured JSON object.
 
