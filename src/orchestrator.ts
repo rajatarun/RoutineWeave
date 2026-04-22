@@ -25,17 +25,6 @@ export class Orchestrator {
 
     const result = await this.engine.execute(task);
 
-    // Structure the Gemini text output into JSON using Nova Lite
-    if (result.success && result.result) {
-      try {
-        result.structured_result = await this.structurer.structure(result.result);
-      } catch (structureError) {
-        logger.error(`[Orchestrator] Nova structuring failed for task: ${task.task_name}`, {
-          error: structureError instanceof Error ? structureError.message : String(structureError),
-        });
-      }
-    }
-
     try {
       await this.router.route(result, task.output);
     } catch (routeError) {
@@ -45,6 +34,16 @@ export class Orchestrator {
     }
 
     if (task.save_result) {
+      if (result.success && result.result) {
+        try {
+          result.structured_result = await this.structurer.structure(result.result);
+        } catch (structureError) {
+          logger.error(`[Orchestrator] Nova structuring failed for task: ${task.task_name}`, {
+            error: structureError instanceof Error ? structureError.message : String(structureError),
+          });
+        }
+      }
+
       try {
         const store = new S3ResultStore();
         await store.save(result);
