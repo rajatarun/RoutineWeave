@@ -38,6 +38,7 @@ export const TaskDefinitionSchema = z.object({
   input: z.record(InputValueSchema).optional(),
   output: OutputConfigSchema,
   enabled: z.boolean().default(true),
+  save_result: z.boolean().default(false),
   timeout_ms: z.number().int().min(1000).max(300_000).default(60_000),
   max_retries: z.number().int().min(0).max(10).optional(),
 });

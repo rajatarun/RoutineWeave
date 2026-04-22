@@ -27,6 +27,7 @@ Globals:
         SNS_TOPIC_ARN: !Ref RoutineWeaveNotificationTopic
         TASKS_BUCKET: !Ref TasksBucket
         TASKS_S3_PREFIX: "tasks/"
+        RESULTS_BUCKET: !Ref ResultsBucket
 
 Resources:
   # ─── S3 Bucket (task store) ───────────────────────────────────────────────────
@@ -47,6 +48,33 @@ Resources:
             Status: Enabled
             NoncurrentVersionExpiration:
               NoncurrentDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: RoutineWeave
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ─── Results Bucket ──────────────────────────────────────────────────────────
+  # DeletionPolicy: Retain — bucket and contents survive stack deletion.
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "routineweave-results-${Environment}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 90
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -100,6 +128,10 @@ Resources:
                 Resource:
                   - !GetAtt TasksBucket.Arn
                   - !Sub "${TasksBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${ResultsBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - sns:Publish
@@ -348,3 +380,9 @@ Outputs:
     Value: !Ref RoutineWeaveNotificationTopic
     Export:
       Name: !Sub "${AWS::StackName}-SnsTopicArn"
+
+  ResultsBucketName:
+    Description: S3 bucket for task execution results
+    Value: !Ref ResultsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ResultsBucket"
