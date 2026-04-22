@@ -131,7 +131,11 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub "${ResultsBucket.Arn}/*"
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ResultsBucket.Arn
+                  - !Sub "${ResultsBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - sns:Publish
@@ -280,6 +284,18 @@ Resources:
           Properties:
             Path: /tasks/{taskName}
             Method: DELETE
+            ApiId: !Ref RoutineWeaveHttpApi
+        ListResults:
+          Type: HttpApi
+          Properties:
+            Path: /results/{taskName}
+            Method: GET
+            ApiId: !Ref RoutineWeaveHttpApi
+        GetResult:
+          Type: HttpApi
+          Properties:
+            Path: /results/{taskName}/{date}/{filename}
+            Method: GET
             ApiId: !Ref RoutineWeaveHttpApi
       Tags:
         Project: RoutineWeave
