@@ -157,6 +157,11 @@ Resources:
                 Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/routineweave-*"
               - Effect: Allow
                 Action:
+                  - bedrock:InvokeModel
+                  - bedrock:Converse
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-lite-v1:0"
+              - Effect: Allow
+                Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:gemini/api_key*"
               - Effect: Allow

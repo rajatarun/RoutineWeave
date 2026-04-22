@@ -1,6 +1,7 @@
 import { TaskDefinition, TaskExecutionResult } from "./scheduler/types";
 import { ExecutionEngine } from "./engine/ExecutionEngine";
 import { GeminiClient } from "./engine/GeminiClient";
+import { NovaStructurer } from "./engine/NovaStructurer";
 import { PromptRenderer } from "./engine/PromptRenderer";
 import { OutputRouter } from "./output/OutputRouter";
 import { S3ResultStore } from "./storage/S3ResultStore";
@@ -9,18 +10,31 @@ import { logger } from "./utils";
 export class Orchestrator {
   private engine: ExecutionEngine;
   private router: OutputRouter;
+  private structurer: NovaStructurer;
 
   constructor() {
     const gemini = new GeminiClient();
     const renderer = new PromptRenderer();
     this.engine = new ExecutionEngine(gemini, renderer);
     this.router = new OutputRouter();
+    this.structurer = new NovaStructurer();
   }
 
   async runTask(task: TaskDefinition): Promise<TaskExecutionResult> {
     logger.info(`[Orchestrator] Starting task: ${task.task_name}`);
 
     const result = await this.engine.execute(task);
+
+    // Structure the Gemini text output into JSON using Nova Lite
+    if (result.success && result.result) {
+      try {
+        result.structured_result = await this.structurer.structure(result.result);
+      } catch (structureError) {
+        logger.error(`[Orchestrator] Nova structuring failed for task: ${task.task_name}`, {
+          error: structureError instanceof Error ? structureError.message : String(structureError),
+        });
+      }
+    }
 
     try {
       await this.router.route(result, task.output);

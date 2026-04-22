@@ -52,6 +52,7 @@ export interface TaskExecutionResult {
   timestamp: string;
   success: boolean;
   result?: string;
+  structured_result?: Record<string, unknown>;
   error?: string;
   duration_ms: number;
 }
