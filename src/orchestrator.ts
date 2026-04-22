@@ -3,6 +3,7 @@ import { ExecutionEngine } from "./engine/ExecutionEngine";
 import { GeminiClient } from "./engine/GeminiClient";
 import { PromptRenderer } from "./engine/PromptRenderer";
 import { OutputRouter } from "./output/OutputRouter";
+import { S3ResultStore } from "./storage/S3ResultStore";
 import { logger } from "./utils";
 
 export class Orchestrator {
@@ -27,6 +28,17 @@ export class Orchestrator {
       logger.error(`[Orchestrator] Output routing failed for task: ${task.task_name}`, {
         error: routeError instanceof Error ? routeError.message : String(routeError),
       });
+    }
+
+    if (task.save_result) {
+      try {
+        const store = new S3ResultStore();
+        await store.save(result);
+      } catch (saveError) {
+        logger.error(`[Orchestrator] Result save failed for task: ${task.task_name}`, {
+          error: saveError instanceof Error ? saveError.message : String(saveError),
+        });
+      }
     }
 
     return result;
