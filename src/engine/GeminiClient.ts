@@ -2,7 +2,21 @@ import { GoogleGenAI, Tool, GenerateContentConfig } from "@google/genai";
 import { getGeminiApiKey } from "../config";
 import { withRetry } from "../utils";
 import { env } from "../config";
-import { InvocationWrapper } from "@weaveaijs/mcp-observatory";
+
+interface McpWrapper {
+  invoke(params: {
+    source: string;
+    model: string;
+    prompt: string;
+    call: () => Promise<unknown>;
+  }): Promise<{ output: unknown }>;
+}
+
+// new Function prevents TypeScript from transpiling import() to require(),
+// allowing Node.js to load the ESM-only package via native dynamic import.
+const esmImport = new Function("m", "return import(m)") as (
+  m: string,
+) => Promise<{ InvocationWrapper: new (name: string) => McpWrapper }>;
 
 export interface GeminiRequest {
   model: string;
@@ -23,7 +37,15 @@ const GROUNDING_TOOL: Tool = { googleSearch: {} };
 
 export class GeminiClient {
   private ai: GoogleGenAI | null = null;
-  private wrapper = new InvocationWrapper("routineweave-gemini");
+  private wrapper: McpWrapper | null = null;
+
+  private async getWrapper(): Promise<McpWrapper> {
+    if (!this.wrapper) {
+      const { InvocationWrapper } = await esmImport("@weaveaijs/mcp-observatory");
+      this.wrapper = new InvocationWrapper("routineweave-gemini");
+    }
+    return this.wrapper;
+  }
 
   private async getAI(): Promise<GoogleGenAI> {
     if (!this.ai) {
@@ -34,7 +56,8 @@ export class GeminiClient {
   }
 
   async generate(request: GeminiRequest): Promise<GeminiResponse> {
-    const result = await this.wrapper.invoke({
+    const wrapper = await this.getWrapper();
+    const result = await wrapper.invoke({
       source: "model",
       model: request.model,
       prompt: request.prompt,
