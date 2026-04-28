@@ -118,6 +118,25 @@ jobs:
         timeout-minutes: 5
         run: sam build --template aws/template.yaml
 
+      - name: Get shared Observatory table details
+        id: shared-observatory
+        run: |
+          STACK_OUTPUTS=$(aws cloudformation describe-stacks \
+            --stack-name tarun-teamweave-shared \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs' \
+            --output json)
+
+          TABLE_NAME=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ObservatoryMetricsTableName") | .OutputValue')
+          TABLE_ARN=$(echo "$STACK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="ObservatoryMetricsTableArn") | .OutputValue')
+
+          echo "table-name=$TABLE_NAME" >> $GITHUB_OUTPUT
+          echo "table-arn=$TABLE_ARN" >> $GITHUB_OUTPUT
+
+          echo "Observatory table retrieved:"
+          echo "  Name: $TABLE_NAME"
+          echo "  ARN: $TABLE_ARN"
+
       - name: SAM Deploy
         run: |
           sam deploy \
@@ -129,6 +148,8 @@ jobs:
             --parameter-overrides \
               Environment=${{ env.ENVIRONMENT }} \
               LogLevel=info \
+              ObservatoryMetricsTableName=${{ steps.shared-observatory.outputs.table-name }} \
+              ObservatoryMetricsTableArn=${{ steps.shared-observatory.outputs.table-arn }} \
             --tags \
               Project=RoutineWeave \
               Environment=${{ env.ENVIRONMENT }} \

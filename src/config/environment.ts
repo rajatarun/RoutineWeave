@@ -13,6 +13,7 @@ const EnvSchema = z.object({
   TASKS_S3_PREFIX: z.string().default("tasks/"),
   RESULTS_BUCKET: z.string().optional(),
   SCHEDULER_LAMBDA_ARN: z.string().optional(),
+  OBSERVATORY_METRICS_TABLE: z.string().optional(),
   MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
   RETRY_BASE_DELAY_MS: z.coerce.number().int().min(100).default(1000),
 });
