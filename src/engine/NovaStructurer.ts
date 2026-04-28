@@ -1,7 +1,21 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { env } from "../config/environment";
 import { logger } from "../utils";
-import { InvocationWrapper } from "@weaveaijs/mcp-observatory";
+
+interface McpWrapper {
+  invoke(params: {
+    source: string;
+    model: string;
+    prompt: string;
+    call: () => Promise<unknown>;
+  }): Promise<{ output: unknown }>;
+}
+
+// new Function prevents TypeScript from transpiling import() to require(),
+// allowing Node.js to load the ESM-only package via native dynamic import.
+const esmImport = new Function("m", "return import(m)") as (
+  m: string,
+) => Promise<{ InvocationWrapper: new (name: string) => McpWrapper }>;
 
 const MODEL_ID = "us.amazon.nova-2-lite-v1:0";
 
@@ -26,14 +40,23 @@ export interface StructuredResult {
 
 export class NovaStructurer {
   private client: BedrockRuntimeClient;
-  private wrapper = new InvocationWrapper("routineweave-bedrock");
+  private wrapper: McpWrapper | null = null;
 
   constructor() {
     this.client = new BedrockRuntimeClient({ region: env.AWS_REGION });
   }
 
+  private async getWrapper(): Promise<McpWrapper> {
+    if (!this.wrapper) {
+      const { InvocationWrapper } = await esmImport("@weaveaijs/mcp-observatory");
+      this.wrapper = new InvocationWrapper("routineweave-bedrock");
+    }
+    return this.wrapper;
+  }
+
   async structure(text: string): Promise<StructuredResult> {
-    const result = await this.wrapper.invoke({
+    const wrapper = await this.getWrapper();
+    const result = await wrapper.invoke({
       source: "model",
       model: MODEL_ID,
       prompt: text,
