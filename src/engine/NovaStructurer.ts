@@ -75,6 +75,6 @@ export class NovaStructurer {
       },
     });
 
-    return result.output;
+    return result.output as StructuredResult;
   }
 }
