@@ -86,6 +86,6 @@ export class GeminiClient {
         ),
     });
 
-    return result.output;
+    return result.output as GeminiResponse;
   }
 }
