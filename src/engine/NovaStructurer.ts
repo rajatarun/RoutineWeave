@@ -1,7 +1,7 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { env } from "../config/environment";
 import { logger } from "../utils";
-import { Tracer } from "@weaveaijs/mcp-observatory";
+import { InvocationWrapper } from "@weaveaijs/mcp-observatory";
 
 const MODEL_ID = "us.amazon.nova-2-lite-v1:0";
 
@@ -26,15 +26,18 @@ export interface StructuredResult {
 
 export class NovaStructurer {
   private client: BedrockRuntimeClient;
-  private tracer = new Tracer("routineweave");
+  private wrapper = new InvocationWrapper("routineweave-bedrock");
 
   constructor() {
     this.client = new BedrockRuntimeClient({ region: env.AWS_REGION });
   }
 
   async structure(text: string): Promise<StructuredResult> {
-    return this.tracer.withSpan(
-      async () => {
+    const result = await this.wrapper.invoke({
+      source: "model",
+      model: MODEL_ID,
+      prompt: text,
+      call: async () => {
         const response = await this.client.send(
           new ConverseCommand({
             modelId: MODEL_ID,
@@ -70,10 +73,8 @@ export class NovaStructurer {
         logger.info("Nova structuring complete", { model: MODEL_ID, summary: parsed.summary });
         return parsed;
       },
-      {
-        model: MODEL_ID,
-        toolName: "nova-structure",
-      },
-    );
+    });
+
+    return result.output;
   }
 }
