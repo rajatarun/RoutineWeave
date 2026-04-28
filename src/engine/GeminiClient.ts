@@ -2,6 +2,7 @@ import { GoogleGenAI, Tool, GenerateContentConfig } from "@google/genai";
 import { getGeminiApiKey } from "../config";
 import { withRetry } from "../utils";
 import { env } from "../config";
+import { createObservedGeminiRequest } from "../observability";
 
 export interface GeminiRequest {
   model: string;
@@ -32,35 +33,47 @@ export class GeminiClient {
   }
 
   async generate(request: GeminiRequest): Promise<GeminiResponse> {
+    const observer = createObservedGeminiRequest(request.model, request.prompt);
+
     return withRetry(
       async () => {
-        const ai = await this.getAI();
-        const tools: Tool[] = request.grounding ? [GROUNDING_TOOL] : [];
+        try {
+          const ai = await this.getAI();
+          const tools: Tool[] = request.grounding ? [GROUNDING_TOOL] : [];
 
-        const config: GenerateContentConfig = {
-          ...request.generationConfig,
-          ...(tools.length > 0 ? { tools } : {}),
-        };
+          const config: GenerateContentConfig = {
+            ...request.generationConfig,
+            ...(tools.length > 0 ? { tools } : {}),
+          };
 
-        const response = await ai.models.generateContent({
-          model: request.model,
-          contents: request.prompt,
-          config,
-        });
+          const response = await ai.models.generateContent({
+            model: request.model,
+            contents: request.prompt,
+            config,
+          });
 
-        const text = response.text;
+          const text = response.text;
 
-        if (!text) {
-          throw new Error("Gemini returned empty response");
+          if (!text) {
+            throw new Error("Gemini returned empty response");
+          }
+
+          const result: GeminiResponse = {
+            text,
+            model: request.model,
+            promptTokens: response.usageMetadata?.promptTokenCount,
+            outputTokens: response.usageMetadata?.candidatesTokenCount,
+            groundingUsed: request.grounding ?? false,
+          };
+
+          await observer.recordSuccess(result.promptTokens, result.outputTokens);
+          return result;
+        } catch (error) {
+          if (error instanceof Error) {
+            await observer.recordError(error);
+          }
+          throw error;
         }
-
-        return {
-          text,
-          model: request.model,
-          promptTokens: response.usageMetadata?.promptTokenCount,
-          outputTokens: response.usageMetadata?.candidatesTokenCount,
-          groundingUsed: request.grounding ?? false,
-        };
       },
       {
         maxAttempts: env.MAX_RETRIES,

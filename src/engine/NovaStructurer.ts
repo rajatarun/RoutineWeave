@@ -1,6 +1,7 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { env } from "../config/environment";
 import { logger } from "../utils";
+import { createObservedBedrockRequest } from "../observability";
 
 const MODEL_ID = "us.amazon.nova-2-lite-v1:0";
 
@@ -31,39 +32,50 @@ export class NovaStructurer {
   }
 
   async structure(text: string): Promise<StructuredResult> {
-    const response = await this.client.send(
-      new ConverseCommand({
-        modelId: MODEL_ID,
-        system: [{ text: SYSTEM_PROMPT }],
-        messages: [
-          {
-            role: "user",
-            content: [{ text: `Convert the following task output to structured JSON:\n\n${text}` }],
-          },
-        ],
-        inferenceConfig: { maxTokens: 4096, temperature: 0 },
-      })
-    );
+    const observer = createObservedBedrockRequest(MODEL_ID);
 
-    const raw = response.output?.message?.content?.[0]?.text ?? "";
-
-    // Strip any accidental markdown code fences before parsing
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-
-    let parsed: StructuredResult;
     try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      logger.warn("Nova returned non-JSON; wrapping in fallback structure", { preview: cleaned.slice(0, 200) });
-      parsed = { summary: "Failed to parse structured output", data: {}, raw_text: text };
+      const response = await this.client.send(
+        new ConverseCommand({
+          modelId: MODEL_ID,
+          system: [{ text: SYSTEM_PROMPT }],
+          messages: [
+            {
+              role: "user",
+              content: [{ text: `Convert the following task output to structured JSON:\n\n${text}` }],
+            },
+          ],
+          inferenceConfig: { maxTokens: 4096, temperature: 0 },
+        })
+      );
+
+      const raw = response.output?.message?.content?.[0]?.text ?? "";
+      const outputTokens = response.usage?.outputTokens;
+
+      // Strip any accidental markdown code fences before parsing
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+
+      let parsed: StructuredResult;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        logger.warn("Nova returned non-JSON; wrapping in fallback structure", { preview: cleaned.slice(0, 200) });
+        parsed = { summary: "Failed to parse structured output", data: {}, raw_text: text };
+      }
+
+      // Guarantee required fields exist
+      if (!parsed.raw_text) parsed.raw_text = text;
+      if (!parsed.summary) parsed.summary = "";
+      if (!Object.prototype.hasOwnProperty.call(parsed, "data")) parsed.data = {};
+
+      await observer.recordSuccess(outputTokens);
+      logger.info("Nova structuring complete", { model: MODEL_ID, summary: parsed.summary });
+      return parsed;
+    } catch (error) {
+      if (error instanceof Error) {
+        await observer.recordError(error);
+      }
+      throw error;
     }
-
-    // Guarantee required fields exist
-    if (!parsed.raw_text) parsed.raw_text = text;
-    if (!parsed.summary) parsed.summary = "";
-    if (!Object.prototype.hasOwnProperty.call(parsed, "data")) parsed.data = {};
-
-    logger.info("Nova structuring complete", { model: MODEL_ID, summary: parsed.summary });
-    return parsed;
   }
 }

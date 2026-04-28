@@ -14,6 +14,16 @@ Parameters:
     Default: info
     AllowedValues: [debug, info, warn, error]
 
+  ObservatoryMetricsTableName:
+    Type: String
+    Default: tarun-teamweave-shared-OBSERVATORY_METRICS
+    Description: Shared Observatory metrics table name from TeamWeave stack
+
+  ObservatoryMetricsTableArn:
+    Type: String
+    Default: arn:aws:dynamodb:us-east-1:239571291755:table/tarun-teamweave-shared-OBSERVATORY_METRICS
+    Description: Shared Observatory metrics table ARN from TeamWeave stack
+
 Globals:
   Function:
     Runtime: nodejs20.x
@@ -28,6 +38,7 @@ Globals:
         TASKS_BUCKET: !Ref TasksBucket
         TASKS_S3_PREFIX: "tasks/"
         RESULTS_BUCKET: !Ref ResultsBucket
+        OBSERVATORY_METRICS_TABLE: !Ref ObservatoryMetricsTableName
 
 Resources:
   # ─── S3 Bucket (task store) ───────────────────────────────────────────────────
@@ -171,6 +182,13 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParameters
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/routineweave/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource: !Ref ObservatoryMetricsTableArn
 
   # ─── Scheduler Lambda ─────────────────────────────────────────────────────────
   # No longer has a generic hourly trigger — each task gets its own
