@@ -5,20 +5,20 @@ import { logger } from "../utils";
 export interface SpanData {
   spanId: string;
   traceId: string;
-  parentSpanId?: string;
   service: string;
   model?: string;
-  toolName?: string;
   startTime: Date;
-  endTime?: Date;
-  inputHash?: string;
-  outputHash?: string;
   inputTokens?: number;
   outputTokens?: number;
-  totalTokens?: number;
   costUsd: number;
-  statusCode?: number;
 }
+
+export interface DecisionData {
+  action: string;
+  reason?: string;
+}
+
+const TTL_SECONDS = 7_776_000; // 90 days
 
 export class ObservatoryMetricsStore {
   private client: DynamoDBClient;
@@ -27,33 +27,36 @@ export class ObservatoryMetricsStore {
     this.client = new DynamoDBClient({ region: env.AWS_REGION });
   }
 
-  async persist(span: SpanData): Promise<void> {
+  async persist(span: SpanData, decision: DecisionData): Promise<void> {
     if (!env.OBSERVATORY_METRICS_TABLE) return;
+
+    const operation = "invoke_model";
+    const pk = `OBSERVATORY#${operation}`;
+    const sk = `${span.startTime.toISOString()}#${span.spanId}`;
+    const ttl = Math.floor(Date.now() / 1000) + TTL_SECONDS;
 
     try {
       await this.client.send(
         new PutItemCommand({
           TableName: env.OBSERVATORY_METRICS_TABLE,
           Item: {
-            spanId: { S: span.spanId },
-            traceId: { S: span.traceId },
-            service: { S: span.service },
-            startTime: { S: span.startTime.toISOString() },
-            costUsd: { N: String(span.costUsd) },
-            ...(span.parentSpanId ? { parentSpanId: { S: span.parentSpanId } } : {}),
+            pk: { S: pk },
+            sk: { S: sk },
+            trace_id: { S: span.spanId },
+            operation: { S: operation },
+            timestamp: { S: span.startTime.toISOString() },
+            prompt_tokens: { N: String(span.inputTokens ?? 0) },
+            completion_tokens: { N: String(span.outputTokens ?? 0) },
+            cost_usd: { N: span.costUsd.toFixed(8) },
+            decision: { S: decision.action },
+            decision_reason: { S: decision.reason ?? "none" },
+            ttl: { N: String(ttl) },
+            ...(span.service ? { service: { S: span.service } } : {}),
             ...(span.model ? { model: { S: span.model } } : {}),
-            ...(span.toolName ? { toolName: { S: span.toolName } } : {}),
-            ...(span.endTime ? { endTime: { S: span.endTime.toISOString() } } : {}),
-            ...(span.inputHash ? { inputHash: { S: span.inputHash } } : {}),
-            ...(span.outputHash ? { outputHash: { S: span.outputHash } } : {}),
-            ...(span.inputTokens != null ? { inputTokens: { N: String(span.inputTokens) } } : {}),
-            ...(span.outputTokens != null ? { outputTokens: { N: String(span.outputTokens) } } : {}),
-            ...(span.totalTokens != null ? { totalTokens: { N: String(span.totalTokens) } } : {}),
-            ...(span.statusCode != null ? { statusCode: { N: String(span.statusCode) } } : {}),
           },
         })
       );
-      logger.debug("Observatory span persisted", { spanId: span.spanId, service: span.service });
+      logger.debug("Observatory span persisted", { pk, sk });
     } catch (error) {
       logger.warn("Failed to persist observatory span to DynamoDB", { error, spanId: span.spanId });
     }
