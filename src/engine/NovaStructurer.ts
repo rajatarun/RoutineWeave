@@ -1,7 +1,7 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { env } from "../config/environment";
 import { logger } from "../utils";
-import type { SpanData } from "../storage/ObservatoryMetricsStore";
+import type { SpanData, DecisionData } from "../storage/ObservatoryMetricsStore";
 import { metricsStore } from "../storage/ObservatoryMetricsStore";
 
 interface McpWrapper {
@@ -10,7 +10,7 @@ interface McpWrapper {
     model: string;
     prompt: string;
     call: () => Promise<unknown>;
-  }): Promise<{ output: unknown; span: { toJSON(): SpanData } }>;
+  }): Promise<{ output: unknown; span: { toJSON(): SpanData }; decision: DecisionData }>;
 }
 
 // new Function prevents TypeScript from transpiling import() to require(),
@@ -100,7 +100,7 @@ export class NovaStructurer {
       },
     });
 
-    await metricsStore.persist(result.span.toJSON());
+    await metricsStore.persist(result.span.toJSON(), result.decision);
     return result.output as StructuredResult;
   }
 }
