@@ -28,6 +28,7 @@ Globals:
         TASKS_BUCKET: !Ref TasksBucket
         TASKS_S3_PREFIX: "tasks/"
         RESULTS_BUCKET: !Ref ResultsBucket
+        OBSERVATORY_METRICS_TABLE: !Ref ObservatoryMetricsTable
 
 Resources:
   # ─── S3 Bucket (task store) ───────────────────────────────────────────────────
@@ -80,6 +81,33 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: RoutineWeave
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ─── Observatory Metrics Table ───────────────────────────────────────────────
+  ObservatoryMetricsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "routineweave-observatory-metrics-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
         - Key: Project
           Value: RoutineWeave
@@ -171,6 +199,13 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParameters
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/routineweave/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource: !GetAtt ObservatoryMetricsTable.Arn
 
   # ─── Scheduler Lambda ─────────────────────────────────────────────────────────
   # No longer has a generic hourly trigger — each task gets its own
