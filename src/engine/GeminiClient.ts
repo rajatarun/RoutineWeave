@@ -2,7 +2,7 @@ import { GoogleGenAI, Tool, GenerateContentConfig } from "@google/genai";
 import { getGeminiApiKey } from "../config";
 import { withRetry } from "../utils";
 import { env } from "../config";
-import type { SpanData } from "../storage/ObservatoryMetricsStore";
+import type { SpanData, DecisionData } from "../storage/ObservatoryMetricsStore";
 import { metricsStore } from "../storage/ObservatoryMetricsStore";
 
 interface McpWrapper {
@@ -11,7 +11,7 @@ interface McpWrapper {
     model: string;
     prompt: string;
     call: () => Promise<unknown>;
-  }): Promise<{ output: unknown; span: { toJSON(): SpanData } }>;
+  }): Promise<{ output: unknown; span: { toJSON(): SpanData }; decision: DecisionData }>;
 }
 
 // new Function prevents TypeScript from transpiling import() to require(),
@@ -111,7 +111,7 @@ export class GeminiClient {
         ),
     });
 
-    await metricsStore.persist(result.span.toJSON());
+    await metricsStore.persist(result.span.toJSON(), result.decision);
     return result.output as GeminiResponse;
   }
 }
