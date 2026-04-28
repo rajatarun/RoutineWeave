@@ -2,7 +2,7 @@ import { GoogleGenAI, Tool, GenerateContentConfig } from "@google/genai";
 import { getGeminiApiKey } from "../config";
 import { withRetry } from "../utils";
 import { env } from "../config";
-import { Tracer } from "@weaveaijs/mcp-observatory";
+import { InvocationWrapper } from "@weaveaijs/mcp-observatory";
 
 export interface GeminiRequest {
   model: string;
@@ -23,7 +23,7 @@ const GROUNDING_TOOL: Tool = { googleSearch: {} };
 
 export class GeminiClient {
   private ai: GoogleGenAI | null = null;
-  private tracer = new Tracer("routineweave");
+  private wrapper = new InvocationWrapper("routineweave-gemini");
 
   private async getAI(): Promise<GoogleGenAI> {
     if (!this.ai) {
@@ -34,9 +34,12 @@ export class GeminiClient {
   }
 
   async generate(request: GeminiRequest): Promise<GeminiResponse> {
-    return this.tracer.withSpan(
-      async () => {
-        return withRetry(
+    const result = await this.wrapper.invoke({
+      source: "model",
+      model: request.model,
+      prompt: request.prompt,
+      call: () =>
+        withRetry(
           async () => {
             const ai = await this.getAI();
             const tools: Tool[] = request.grounding ? [GROUNDING_TOOL] : [];
@@ -58,15 +61,13 @@ export class GeminiClient {
               throw new Error("Gemini returned empty response");
             }
 
-            const result: GeminiResponse = {
+            return {
               text,
               model: request.model,
               promptTokens: response.usageMetadata?.promptTokenCount,
               outputTokens: response.usageMetadata?.candidatesTokenCount,
               groundingUsed: request.grounding ?? false,
             };
-
-            return result;
           },
           {
             maxAttempts: env.MAX_RETRIES,
@@ -82,12 +83,9 @@ export class GeminiClient {
             },
           },
           `GeminiClient.generate(${request.model})`,
-        );
-      },
-      {
-        model: request.model,
-        toolName: "gemini-generate",
-      },
-    );
+        ),
+    });
+
+    return result.output;
   }
 }
