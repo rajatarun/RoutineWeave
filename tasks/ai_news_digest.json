@@ -5,7 +5,7 @@
   "model": "gemini-3.1-flash-lite-preview",
   "grounding": true,
   "enabled": true,
-  "timeout_ms": 60000,
+  "timeout_ms": 290000,
   "input": {
     "topics": ["model releases", "research breakthroughs", "industry news", "regulatory updates"],
     "region": "global"
