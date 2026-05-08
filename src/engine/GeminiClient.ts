@@ -52,7 +52,7 @@ export class GeminiClient {
   private async getAI(): Promise<GoogleGenAI> {
     if (!this.ai) {
       const apiKey = await getGeminiApiKey();
-      this.ai = new GoogleGenAI({ apiKey });
+      this.ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: 290_000 } });
     }
     return this.ai;
   }
