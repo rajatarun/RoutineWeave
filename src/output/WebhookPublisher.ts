@@ -22,11 +22,20 @@ export class WebhookPublisher implements OutputHandler {
 
     await withRetry(
       async () => {
-        const response = await fetch(url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-        });
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+          });
+        } catch (error: any) {
+          if (error instanceof Error && error.cause) {
+            const causeStr = error.cause instanceof Error ? error.cause.message : String(error.cause);
+            throw new Error(`fetch failed: ${causeStr}`);
+          }
+          throw error;
+        }
 
         if (!response.ok) {
           throw new Error(`Webhook responded with status ${response.status}: ${response.statusText}`);
