@@ -3,11 +3,19 @@ import { OutputHandler, OutputPayload } from "../output/interfaces";
 import { TaskExecutionResult } from "../scheduler/types";
 
 const mockSNSPublish = jest.fn().mockResolvedValue(undefined);
+const mockWebhookPublish = jest.fn().mockResolvedValue(undefined);
 
 jest.mock("../output/SNSPublisher", () => ({
   SNSPublisher: jest.fn().mockImplementation(() => ({
     name: "sns",
     publish: mockSNSPublish,
+  })),
+}));
+
+jest.mock("../output/WebhookPublisher", () => ({
+  WebhookPublisher: jest.fn().mockImplementation(() => ({
+    name: "webhook",
+    publish: mockWebhookPublish,
   })),
 }));
 
@@ -40,17 +48,28 @@ describe("OutputRouter", () => {
     expect(payload.success).toBe(true);
   });
 
+  it("routes to Webhook handler", async () => {
+    const result = makeResult();
+    await router.route(result, {
+      type: "webhook",
+      url: "https://example.com/hook",
+    });
+    expect(mockWebhookPublish).toHaveBeenCalledTimes(1);
+    const [payload] = mockWebhookPublish.mock.calls[0] as [OutputPayload];
+    expect(payload.task).toBe("test_task");
+    expect(payload.success).toBe(true);
+  });
+
   it("allows registering custom handlers", async () => {
     const customHandler: OutputHandler = {
-      name: "webhook",
+      name: "custom",
       publish: jest.fn().mockResolvedValue(undefined),
     };
     router.registerHandler(customHandler);
 
     const result = makeResult();
     await router.route(result, {
-      type: "webhook",
-      url: "https://example.com/hook",
+      type: "custom" as any,
     });
     expect(customHandler.publish).toHaveBeenCalledTimes(1);
   });
