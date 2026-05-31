@@ -102,6 +102,22 @@ describe("API handler — tasks", () => {
     expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({ save_result: true }));
   });
 
+  it("POST /tasks accepts webhook output type", async () => {
+    mockGet.mockResolvedValue(null);
+    mockPut.mockResolvedValue(undefined);
+    const taskWithWebhook = {
+      ...validTask,
+      output: { type: "webhook", url: "https://example.com/api/webhook" },
+    };
+    const res = await handler(makeEvent("POST", "/tasks", undefined, taskWithWebhook));
+    expect(asResult(res).statusCode).toBe(201);
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        output: { type: "webhook", url: "https://example.com/api/webhook" },
+      })
+    );
+  });
+
   it("POST /tasks returns 409 for duplicate task", async () => {
     mockGet.mockResolvedValue(validTask);
     const res = await handler(makeEvent("POST", "/tasks", undefined, validTask));
