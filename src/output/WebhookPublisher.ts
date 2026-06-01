@@ -20,7 +20,14 @@ export class WebhookPublisher implements OutputHandler {
       ...customHeaders,
     };
 
-    logger.info(`Webhook request payload for task ${payload.task}`, { url, headers, payload });
+    let requestPayload: unknown;
+    try {
+      requestPayload = JSON.parse(payload.result);
+    } catch {
+      requestPayload = { result: payload.result };
+    }
+
+    logger.info(`Webhook request payload for task ${payload.task}`, { url, headers, payload: requestPayload });
 
     await withRetry(
       async () => {
@@ -29,7 +36,7 @@ export class WebhookPublisher implements OutputHandler {
           response = await fetch(url, {
             method: "POST",
             headers,
-            body: JSON.stringify(payload),
+            body: JSON.stringify(requestPayload),
           });
         } catch (error: any) {
           if (error instanceof Error && error.cause) {
