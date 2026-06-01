@@ -20,6 +20,8 @@ export class WebhookPublisher implements OutputHandler {
       ...customHeaders,
     };
 
+    logger.info(`Webhook request payload for task ${payload.task}`, { url, headers, payload });
+
     await withRetry(
       async () => {
         let response: Response;
