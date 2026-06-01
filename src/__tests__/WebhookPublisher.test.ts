@@ -32,13 +32,13 @@ describe("WebhookPublisher", () => {
     );
   });
 
-  it("publishes to webhook with default headers", async () => {
+  it("publishes to webhook with default headers, wrapping non-JSON string in result object", async () => {
     fetchSpy.mockResolvedValue({
       ok: true,
       status: 200,
     } as Response);
 
-    const payload = makePayload();
+    const payload = makePayload({ result: "Test output" });
     await publisher.publish(payload, { url: "https://example.com/hook" });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -47,17 +47,19 @@ describe("WebhookPublisher", () => {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ result: "Test output" }),
     });
   });
 
-  it("publishes to webhook with custom headers", async () => {
+  it("publishes to webhook with custom headers, parsing JSON result", async () => {
     fetchSpy.mockResolvedValue({
       ok: true,
       status: 200,
     } as Response);
 
-    const payload = makePayload();
+    const payload = makePayload({
+      result: JSON.stringify({ key: "value", nested: { prop: 123 } }),
+    });
     await publisher.publish(payload, {
       url: "https://example.com/hook",
       headers: {
@@ -74,7 +76,7 @@ describe("WebhookPublisher", () => {
         Authorization: "Bearer token123",
         "X-Custom-Header": "value123",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ key: "value", nested: { prop: 123 } }),
     });
   });
 
