@@ -7,8 +7,13 @@
 // keeping it honest is that each repository asserts its own writer against the
 // vendored contract. This file does that for RoutineWeave: it drives the REAL
 // ObservatoryMetricsStore.persist() path with the DynamoDB client mocked,
-// captures the actual PutItemCommand Item, and checks it with the same I1-I4
+// captures the actual PutItemCommand Item, and checks it with the same I1-I8
 // checks the Python siblings run (contracts/conformance.ts ports conformance.py).
+//
+// v2.0.0: reads now go through the SpanTimelineIndex GSI (span_date +
+// timestamp) instead of the partition key, so pk-based reachability
+// (readersFor) below is a historical/legacy model, not what makes a row
+// visible today. See the "v2" tests.
 import { PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { checkItem, readersFor, loadContract } from "../../contracts/conformance";
 import type { SpanData, DecisionData } from "../storage/ObservatoryMetricsStore";
@@ -58,7 +63,7 @@ async function captureEmittedItem(): Promise<Record<string, unknown>> {
 }
 
 describe("OBSERVATORY_METRICS shared-table contract", () => {
-  it("the span RoutineWeave actually writes satisfies invariants I1-I4", async () => {
+  it("the span RoutineWeave actually writes satisfies invariants I1-I8", async () => {
     const item = await captureEmittedItem();
 
     // checkItem unwraps the low-level AttributeValue shape ({ S: "..." }) this
@@ -97,18 +102,19 @@ describe("OBSERVATORY_METRICS shared-table contract", () => {
     expect(ttl).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
-  it("I5: RoutineWeave's pk is a discriminator the dashboard readers enumerate", async () => {
-    // RoutineWeave keys spans by OPERATION name (invoke_model), which is what
-    // the contract's OBSERVATORY namespace declares its discriminator to be and
-    // what the readers enumerate — so these rows are actually visible on the
-    // dashboards. Asserted so that a future change which silently moves them
-    // into an unread partition (the failure mode is silent: PutItem succeeds)
-    // fails here instead of quietly emptying a dashboard.
+  it("HISTORICAL: under the pre-v2 pk-reachability model, RoutineWeave's pk had a reader", async () => {
+    // RoutineWeave keys its base-table pk by OPERATION name (invoke_model),
+    // which is what the contract's (now legacy-informational) OBSERVATORY
+    // namespace declares its discriminator to be and what the old pk-query
+    // readers enumerated — so under the superseded v1 model these rows were
+    // actually visible. `readersFor`/namespace_registry are kept for reading
+    // pre-migration rows; under v2 the pk is the writer's own business and
+    // visibility comes from the SpanTimelineIndex GSI instead (see the "v2"
+    // test below), so this no longer says anything about whether a row is
+    // visible today.
     //
-    // Note this is the opposite of ScreenWeave's situation, where the same
-    // namespace is keyed by TOOL name and has no reader; see that repository's
-    // contracts/README.md. Which scheme wins portfolio-wide is an open platform
-    // decision — this test only pins what RoutineWeave does today.
+    // Note this was always the opposite of ScreenWeave's pre-v2 situation,
+    // where the same namespace was keyed by TOOL name and had no reader.
     const item = await captureEmittedItem();
     const pk = (item.pk as { S: string }).S;
 
@@ -117,8 +123,32 @@ describe("OBSERVATORY_METRICS shared-table contract", () => {
     const registry = loadContract().namespace_registry.OBSERVATORY;
     expect(registry.discriminator).toBe("operation");
     expect(registry.discriminator_values).toContain("invoke_model");
+    expect(registry.status).toBe("legacy-informational");
 
     expect(readersFor(pk).length).toBeGreaterThan(0);
+  });
+
+  it("v2: the span is in the SpanTimelineIndex via span_date + timestamp", async () => {
+    // This is what actually makes the row visible under v2, independent of
+    // the pk. Read the GSI's key attribute names from the contract itself
+    // rather than hardcoding them.
+    const item = await captureEmittedItem();
+    const contract = loadContract();
+    const { partition_key: gsiPk, sort_key: gsiSk } = contract.gsi as {
+      partition_key: string;
+      sort_key: string;
+    };
+
+    const gsiPartitionValue = (item[gsiPk] as { S: string } | undefined)?.S;
+    const gsiSortValue = (item[gsiSk] as { S: string } | undefined)?.S;
+
+    expect(gsiPartitionValue).toBeTruthy();
+    expect(gsiSortValue).toBeTruthy();
+    expect(gsiSortValue!.slice(0, 10)).toBe(gsiPartitionValue);
+    expect(gsiPartitionValue).toBe(span.startTime.toISOString().slice(0, 10));
+
+    // Full I1-I8 pass, using the actual emitted item.
+    expect(checkItem(item)).toEqual([]);
   });
 
   it("writes nothing at all when the shared table is not configured", async () => {
