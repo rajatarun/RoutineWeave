@@ -2,7 +2,7 @@
   "task_name": "weekly_health_report",
   "schedule": "0 9 * * 1",
   "prompt": "Today is {{current_date}} (Monday). Generate a weekly system health report for services: {{services}}. Environment: {{environment}}. Alert thresholds to review: {{alert_thresholds}}.\n\n## Infrastructure Health Checklist\n- List 5 critical metrics to review for the listed services\n- List 3 security hygiene tasks\n\n## Performance Benchmarks\n- Key performance indicators for the listed services\n\n## Incident Review Template\n- Structured template for reviewing incidents from the past week\n\n## Deployment Health\n- Items to verify for last week's deployments\n\n## Week Ahead Priorities\n- Framework for setting engineering priorities based on the services listed\n\nFormat with clear headers and bullet points. Keep each section concise and actionable.",
-  "model": "gemini-3.1-flash-lite-preview",
+  "model": "gemini-3.5-flash-lite",
   "enabled": true,
   "timeout_ms": 90000,
   "input": {

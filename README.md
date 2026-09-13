@@ -69,7 +69,7 @@ AI-powered scheduled execution engine. Define prompts as JSON tasks, store them 
 **Compute**: AWS Lambda (arm64, Node.js 20)  
 **Scheduling**: Dual EventBridge — S3 events → Registrar → per-task cron rules → Scheduler  
 **Task storage**: AWS S3 (versioned, EventBridge-enabled)  
-**AI**: Google Gemini `gemini-3.1-flash-lite-preview` via `@google/genai`  
+**AI**: Google Gemini `gemini-3.5-flash-lite` via `@google/genai`  
 **API key**: AWS Secrets Manager (`gemini/api_key` → field `key`)  
 **Notifications**: AWS SNS email subscription (provisioned by SAM)  
 **Observability**: CloudWatch Logs (structured JSON) + CloudWatch Alarm on Lambda errors  
@@ -129,7 +129,7 @@ routineweave/
 {
   "task_name": "ai_news_digest",
   "schedule": "0 */6 * * *",
-  "model": "gemini-3.1-flash-lite-preview",
+  "model": "gemini-3.5-flash-lite",
   "grounding": true,
   "enabled": true,
   "timeout_ms": 60000,
@@ -151,7 +151,7 @@ routineweave/
 | `task_name`    | Yes      | —                              | Lowercase alphanumeric + underscores; used as S3 key and EventBridge rule name |
 | `schedule`     | Yes      | —                              | Standard 5-field cron (e.g. `0 8 * * *`) |
 | `prompt`       | Yes      | —                              | Prompt template with `{{variable}}` placeholders |
-| `model`        | No       | `gemini-3.1-flash-lite-preview`| Gemini model ID |
+| `model`        | No       | `gemini-3.5-flash-lite`| Gemini model ID |
 | `grounding`    | No       | `false`                        | Enables Google Search grounding tool |
 | `enabled`      | No       | `true`                         | Set `false` to disable without deleting the task |
 | `timeout_ms`   | No       | `60000`                        | Max execution time (1 000 – 300 000 ms) |

@@ -36,7 +36,7 @@ const validTask = {
   task_name: "my_task",
   schedule: "0 * * * *",
   prompt: "Test",
-  model: "gemini-3.1-flash-lite-preview",
+  model: "gemini-3.5-flash-lite",
   grounding: false,
   enabled: true,
   save_result: false,
