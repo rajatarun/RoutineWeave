@@ -2,7 +2,7 @@
   "task_name": "ai_news_digest",
   "schedule": "0 */6 * * *",
   "prompt": "Today is {{current_date}}. You are an AI analyst. Provide a concise digest of the most important developments from the past 6 hours across these topics: {{topics}}. Format your response as exactly 5 bullet points, each starting with '•'. Focus on the areas listed in topics. Source region: {{region}}. Be specific and factual.",
-  "model": "gemini-3.1-flash-lite-preview",
+  "model": "gemini-3.5-flash-lite",
   "grounding": true,
   "enabled": true,
   "timeout_ms": 290000,
