@@ -1,0 +1,146 @@
+/**
+ * Validate one OBSERVATORY_METRICS item against the shared table contract.
+ *
+ * This is the TypeScript port of mcp-observatory's `contracts/conformance.py`.
+ * The shared table is written by services in two languages that cannot import
+ * each other's code, so the only thing keeping their rows mutually legible is
+ * that each repository checks itself against the same vendored contract file.
+ * The Python module and this one implement the SAME invariants (I1-I4) over the
+ * SAME `observatory_metrics_item.json` sitting beside them — if you change a
+ * check here, change it there too.
+ *
+ * Deliberately dependency-free (node:fs + node:path only) and reads the JSON at
+ * runtime rather than `import`ing it, so the checker is verifying the vendored
+ * artefact itself and not a compiler-inlined copy of it.
+ */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+export const CONTRACT_FILENAME = "observatory_metrics_item.json";
+
+// "{iso8601}#{trace_id}" -- the timestamp must sort first, so it is anchored.
+const SK_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?#.+$/;
+const PK_RE = /^([A-Z_]+)#(.+)$/;
+
+export interface NamespaceEntry {
+  discriminator: string;
+  discriminator_values?: string[];
+  writers?: string[];
+  readers?: string[];
+  status?: string;
+}
+
+export interface Contract {
+  contract: string;
+  version: string;
+  key_schema: { partition_key: string; sort_key: string };
+  namespace_registry: Record<string, NamespaceEntry>;
+  required_attributes: Record<string, string>;
+  invariants: string[];
+  [key: string]: unknown;
+}
+
+/** Read the contract JSON sitting beside this module unless told otherwise. */
+export function loadContract(path?: string): Contract {
+  const target = path ?? join(__dirname, CONTRACT_FILENAME);
+  return JSON.parse(readFileSync(target, "utf-8")) as Contract;
+}
+
+/**
+ * Accept both the resource-level item shape and the low-level AttributeValue one.
+ *
+ * Python writers use `boto3.resource(...).Table.put_item` and emit plain values;
+ * the Node writers here use the low-level DynamoDB client and emit `{ S: "..." }`.
+ * Both must be checkable by the same function or the two languages drift.
+ */
+export function unwrap(value: unknown): unknown {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const keys = Object.keys(value as Record<string, unknown>);
+    if (keys.length === 1 && ["S", "N", "BOOL", "NULL"].includes(keys[0])) {
+      return (value as Record<string, unknown>)[keys[0]];
+    }
+  }
+  return value;
+}
+
+/**
+ * Return a list of contract violations; empty means the item conforms.
+ *
+ * Returning problems rather than throwing lets a caller report every violation
+ * in one go, which matters when a writer is wrong about several things at once
+ * (a wrong key spelling usually travels with a wrong namespace).
+ */
+export function checkItem(item: Record<string, unknown>, contract?: Contract): string[] {
+  const c = contract ?? loadContract();
+  const problems: string[] = [];
+
+  // I1 -- key attributes are spelled in lower case.
+  for (const [wrong, right] of [["PK", "pk"], ["SK", "sk"]]) {
+    if (wrong in item && !(right in item)) {
+      problems.push(
+        `I1: item uses '${wrong}' but the table's key attribute is '${right}'; ` +
+          "DynamoDB attribute names are case sensitive, so PutItem rejects this " +
+          "item with a ValidationException"
+      );
+    }
+  }
+  for (const required of [c.key_schema.partition_key, c.key_schema.sort_key]) {
+    if (!(required in item)) {
+      problems.push(`I1: required key attribute '${required}' is missing`);
+    }
+  }
+
+  const pk = unwrap(item.pk);
+  const sk = unwrap(item.sk);
+
+  // I2 -- pk carries a registered namespace.
+  if (typeof pk === "string") {
+    const match = PK_RE.exec(pk);
+    if (!match) {
+      problems.push(`I2: pk '${pk}' does not match '{namespace}#{discriminator}'`);
+    } else if (!(match[1] in c.namespace_registry)) {
+      problems.push(
+        `I2: pk namespace '${match[1]}' is not in the contract's namespace_registry ` +
+          `${JSON.stringify(Object.keys(c.namespace_registry).sort())}; a row in an ` +
+          "unregistered partition is invisible to every reader"
+      );
+    }
+  }
+
+  // I3 -- sk sorts by time.
+  if (typeof sk === "string" && !SK_RE.test(sk)) {
+    problems.push(
+      `I3: sk '${sk}' does not match '{iso8601}#{trace_id}'; readers range-query ` +
+        "sk lexicographically, so a non-ISO or non-leading timestamp breaks time filters"
+    );
+  }
+
+  // I4 -- rows expire.
+  if (!("ttl" in item)) {
+    problems.push("I4: no 'ttl' attribute; rows would accumulate in a shared table forever");
+  }
+
+  return problems;
+}
+
+/**
+ * Which readers, if any, will ever see a row written at this pk.
+ *
+ * An empty array is the machine-readable form of "this telemetry is written,
+ * billed, and never read by anything".
+ */
+export function readersFor(pk: string, contract?: Contract): string[] {
+  const c = contract ?? loadContract();
+  const match = PK_RE.exec(pk || "");
+  if (!match) return [];
+  const entry = c.namespace_registry[match[1]];
+  if (!entry) return [];
+  if (entry.discriminator === "operation") {
+    const allowed = entry.discriminator_values ?? [];
+    if (allowed.length && !allowed.includes(match[2])) {
+      // Registered namespace, but a discriminator no reader enumerates.
+      return [];
+    }
+  }
+  return [...(entry.readers ?? [])];
+}
