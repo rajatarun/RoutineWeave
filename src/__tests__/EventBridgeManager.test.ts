@@ -22,7 +22,7 @@ const validTask = {
   task_name: "test_task",
   schedule: "0 */6 * * *",
   prompt: "Test",
-  model: "gemini-3.1-flash-lite-preview",
+  model: "gemini-3.5-flash-lite",
   grounding: false,
   enabled: true,
   timeout_ms: 60000,

@@ -31,7 +31,7 @@ export const TaskDefinitionSchema = z.object({
   task_name: z.string().min(1).regex(/^[a-z0-9_]+$/, "task_name must be lowercase alphanumeric with underscores"),
   schedule: z.string().min(1),
   prompt: z.string().min(1),
-  model: z.string().default("gemini-3.1-flash-lite-preview"),
+  model: z.string().default("gemini-3.5-flash-lite"),
   grounding: z.boolean().default(false),
   variables: z.record(z.string()).optional(),
   // input values can be strings or arrays; arrays are JSON.stringify'd before injection
