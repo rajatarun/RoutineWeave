@@ -32,7 +32,13 @@ export class ObservatoryMetricsStore {
 
     const operation = "invoke_model";
     const pk = `OBSERVATORY#${operation}`;
-    const sk = `${span.startTime.toISOString()}#${span.spanId}`;
+    // One clock reading (span.startTime, set by the caller), reused for sk,
+    // timestamp AND span_date. Deriving span_date from a fresh `new Date()`
+    // instead could straddle midnight UTC relative to timestamp and produce
+    // a row indexed under a day it did not happen on -- invariant I7.
+    const timestamp = span.startTime.toISOString();
+    const spanDate = timestamp.slice(0, 10);
+    const sk = `${timestamp}#${span.spanId}`;
     const ttl = Math.floor(Date.now() / 1000) + TTL_SECONDS;
 
     try {
@@ -44,7 +50,8 @@ export class ObservatoryMetricsStore {
             sk: { S: sk },
             trace_id: { S: span.spanId },
             operation: { S: operation },
-            timestamp: { S: span.startTime.toISOString() },
+            timestamp: { S: timestamp },
+            span_date: { S: spanDate },
             prompt_tokens: { N: String(span.inputTokens ?? 0) },
             completion_tokens: { N: String(span.outputTokens ?? 0) },
             cost_usd: { N: span.costUsd.toFixed(8) },
