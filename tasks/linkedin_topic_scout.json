@@ -1,0 +1,34 @@
+{
+  "task_name": "linkedin_topic_scout",
+  "schedule": "0 13 * * 1",
+  "prompt": "Today is {{current_date}} ({{day_of_week}}).\n\nYou are a technology trend analyst and LinkedIn content strategist. Search before you answer. Your own training data is months out of date and is not evidence of what is trending — treat anything you cannot confirm from a search result as unknown.\n\nTASK\nPick exactly ONE topic in artificial intelligence that is gaining momentum as of {{current_date}}, and frame it as a LinkedIn article for {{audience}}.\n\nSELECTION RULES\n1. Ground it. Run searches first, then choose. Name the concrete thing that happened — a model or product release, a benchmark result, a funding round or acquisition, a regulation or enforcement action, a published paper, a measured adoption or cost number — and the date it happened.\n2. Recency is a hard filter, not a preference. If the newest source you can find for a candidate topic is older than {{recency_days}} days, discard that candidate and pick another. Do not stretch an older story into a \"trend\".\n3. Do not repeat or rephrase any of these recently used titles:\n{{recent_titles}}\n4. Prefer these areas, but only where something specific has just moved:\n{{focus_areas}}\n5. Reject evergreen framings — \"AI is transforming X\", \"the rise of AI agents\", \"why every company needs an AI strategy\" — unless a specific new development gives them a genuinely new angle. A headline that would have been equally true a year ago is a failed topic.\n6. Scope it so a 1000-1500 word article can treat it in depth: narrow enough to say something non-obvious, consequential enough to matter to someone running an engineering organisation.\n\nOUTPUT\nReturn exactly one JSON object and nothing else — no markdown, no code fences, no commentary before or after it. Every field must be a non-empty string.\n\n{\n  \"title\": \"The LinkedIn headline. Under 90 characters, specific, no clickbait.\",\n  \"topic\": \"Two or three sentences: what happened, and why it matters now rather than at any other time.\",\n  \"objective\": \"The argument the article makes and what the reader should be able to do or decide after reading it.\",\n  \"sourceInputs\": \"The evidence the article gets written from. First, at least three sources, newest first, one per line, each as 'YYYY-MM-DD - publisher - headline - URL'. Then a blank line, then the specific facts, numbers and quotes to build on. Use only dates you actually saw in a search result; never estimate one.\"\n}",
+  "model": "gemini-3.8-flash",
+  "grounding": true,
+  "enabled": true,
+  "timeout_ms": 180000,
+  "save_result": true,
+  "input": {
+    "audience": "software engineers, architects, engineering managers, CTOs and technical founders",
+    "recency_days": "21",
+    "focus_areas": [
+      "AI agents and autonomous workflows",
+      "reasoning models and inference-time compute",
+      "enterprise AI adoption and measured ROI",
+      "AI infrastructure, serving cost and capacity",
+      "multimodal models",
+      "AI governance, regulation and evaluation",
+      "developer productivity and AI-assisted engineering",
+      "robotics and embodied AI",
+      "breakthrough research results"
+    ],
+    "recent_titles": []
+  },
+  "output": {
+    "type": "webhook",
+    "url": "https://REPLACE_ME.execute-api.us-east-1.amazonaws.com/prod/admin/articles",
+    "headers": {
+      "x-api-key": "REPLACE_ME",
+      "Authorization": "Bearer REPLACE_ME"
+    }
+  }
+}

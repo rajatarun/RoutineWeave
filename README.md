@@ -112,6 +112,7 @@ routineweave/
 ├── tasks/                        # Sample task definitions (upload to S3 to activate)
 │   ├── ai_news_digest.json
 │   ├── daily_productivity_summary.json
+│   ├── linkedin_topic_scout.json
 │   ├── price_tracker.json
 │   └── weekly_health_report.json
 ├── aws/
@@ -169,6 +170,48 @@ routineweave/
 | `{{day_of_week}}`      | e.g. `Monday`                     |
 
 All keys from `input` and `variables` are also injected. `input` takes precedence over `variables`.
+
+### Writing a prompt that stays current
+
+Two properties of this engine decide whether a scheduled prompt reports what is
+happening or what was happening when the model was trained:
+
+- **`grounding` defaults to `false`.** A task that asks what is trending, newest,
+  current or recent and leaves grounding off is asking the model to recall, not
+  to look. It will answer confidently, from training data, and the answer ages
+  quietly — nothing fails, the output just stops being true.
+- **Nothing tells the model the date unless the prompt does.** `{{current_date}}`,
+  `{{current_datetime}}` and `{{day_of_week}}` are injected on every run but only
+  substituted where the template uses them. Without one, "the last two weeks" has
+  no anchor to be relative to.
+
+So a task that depends on current facts opens with `Today is {{current_date}}`,
+sets `grounding: true`, and states recency as a rule the model can fail rather
+than a preference — see `tasks/linkedin_topic_scout.json`, which discards any
+candidate whose newest source is older than `recency_days`.
+
+### Content pipeline handoff (`linkedin_topic_scout`)
+
+`linkedin_topic_scout` picks one grounded, dated AI topic each Monday and POSTs
+it straight to the content orchestrator's `POST /admin/articles`, which creates
+the article the orchestrator's own draft generation picks up at 15:15 UTC the
+same morning. The scout runs at 13:00 UTC to stay ahead of it.
+
+Field mapping, which is narrower than it looks: `put_article` persists `title`
+and `sourceInputs` and drops everything else, and `generate_drafts_handler` then
+reads them back as the topic and the objective. `topic` and `objective` are
+returned for the record but do not survive the write, so `sourceInputs` has to
+carry the dated sources and facts the drafts get written from — that string is
+the entire brief the writer sees.
+
+Before uploading the task to S3, replace the three `REPLACE_ME` values in
+`output`: the API base URL, `x-api-key`, and the SIWE bearer token. They are
+placeholders in the repository on purpose; the admin API requires both
+credentials and neither belongs in git.
+
+`recent_titles` is a static list. It de-duplicates only against what is written
+in it, so refresh it from the published titles periodically or the scout drifts
+back onto ground it has already covered.
 
 ---
 
