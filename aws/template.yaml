@@ -16,13 +16,15 @@ Parameters:
 
   ObservatoryMetricsTableName:
     Type: String
-    Default: tarun-teamweave-shared-OBSERVATORY_METRICS
-    Description: Shared Observatory metrics table name from TeamWeave stack
+    Description: Shared Observatory metrics table name (from your shared observability stack outputs)
 
   ObservatoryMetricsTableArn:
     Type: String
-    Default: arn:aws:dynamodb:us-east-1:239571291755:table/tarun-teamweave-shared-OBSERVATORY_METRICS
-    Description: Shared Observatory metrics table ARN from TeamWeave stack
+    Description: Shared Observatory metrics table ARN (from your shared observability stack outputs)
+
+  NotificationSubscriberEmail:
+    Type: String
+    Description: Email address subscribed to the RoutineWeave SNS notification topic
 
 Globals:
   Function:
@@ -109,7 +111,7 @@ Resources:
     Properties:
       TopicArn: !Ref RoutineWeaveNotificationTopic
       Protocol: email
-      Endpoint: rajatarun12@gmail.com
+      Endpoint: !Ref NotificationSubscriberEmail
 
   # ─── Shared IAM Role ──────────────────────────────────────────────────────────
   RoutineWeaveLambdaRole:

@@ -9,7 +9,7 @@
         "sns:Subscribe",
         "sns:ListSubscriptionsByTopic"
       ],
-      "Resource": "arn:aws:sns:us-east-1:239571291755:routineweave-*"
+      "Resource": "arn:aws:sns:us-east-1:123456789012:routineweave-*"
     },
     {
       "Sid": "CloudWatchLogs",
@@ -20,7 +20,7 @@
         "logs:PutLogEvents",
         "logs:DescribeLogStreams"
       ],
-      "Resource": "arn:aws:logs:*:239571291755:log-group:/aws/lambda/routineweave-*"
+      "Resource": "arn:aws:logs:*:123456789012:log-group:/aws/lambda/routineweave-*"
     },
     {
       "Sid": "EventBridgeTaskRules",
@@ -32,7 +32,7 @@
         "events:RemoveTargets",
         "events:DescribeRule"
       ],
-      "Resource": "arn:aws:events:us-east-1:239571291755:rule/routineweave-task-*"
+      "Resource": "arn:aws:events:us-east-1:123456789012:rule/routineweave-task-*"
     },
     {
       "Sid": "SecretsManagerGeminiKey",
@@ -40,7 +40,7 @@
       "Action": [
         "secretsmanager:GetSecretValue"
       ],
-      "Resource": "arn:aws:secretsmanager:us-east-1:239571291755:secret:gemini/api_key*"
+      "Resource": "arn:aws:secretsmanager:us-east-1:123456789012:secret:gemini/api_key*"
     },
     {
       "Sid": "SSMParameterRead",
@@ -49,7 +49,7 @@
         "ssm:GetParameter",
         "ssm:GetParameters"
       ],
-      "Resource": "arn:aws:ssm:us-east-1:239571291755:parameter/routineweave/*"
+      "Resource": "arn:aws:ssm:us-east-1:123456789012:parameter/routineweave/*"
     }
   ]
 }
