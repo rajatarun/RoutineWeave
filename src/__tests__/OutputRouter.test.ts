@@ -4,6 +4,7 @@ import { TaskExecutionResult } from "../scheduler/types";
 
 const mockSNSPublish = jest.fn().mockResolvedValue(undefined);
 const mockWebhookPublish = jest.fn().mockResolvedValue(undefined);
+const mockSlackPublish = jest.fn().mockResolvedValue(undefined);
 
 jest.mock("../output/SNSPublisher", () => ({
   SNSPublisher: jest.fn().mockImplementation(() => ({
@@ -16,6 +17,13 @@ jest.mock("../output/WebhookPublisher", () => ({
   WebhookPublisher: jest.fn().mockImplementation(() => ({
     name: "webhook",
     publish: mockWebhookPublish,
+  })),
+}));
+
+jest.mock("../output/SlackPublisher", () => ({
+  SlackPublisher: jest.fn().mockImplementation(() => ({
+    name: "slack",
+    publish: mockSlackPublish,
   })),
 }));
 
@@ -74,10 +82,19 @@ describe("OutputRouter", () => {
     expect(customHandler.publish).toHaveBeenCalledTimes(1);
   });
 
+  it("routes to Slack handler", async () => {
+    const result = makeResult();
+    await router.route(result, {
+      type: "slack",
+      webhook_url: "https://hooks.slack.com/services/T/B/X",
+    });
+    expect(mockSlackPublish).toHaveBeenCalledTimes(1);
+  });
+
   it("throws for unsupported output type", async () => {
     const result = makeResult();
     await expect(
-      router.route(result, { type: "slack", webhook_url: "https://example.com" }),
-    ).rejects.toThrow("Unsupported output type: slack");
+      router.route(result, { type: "unknown" as any }),
+    ).rejects.toThrow("Unsupported output type: unknown");
   });
 });
