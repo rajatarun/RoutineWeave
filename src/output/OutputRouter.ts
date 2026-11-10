@@ -2,6 +2,7 @@ import { OutputConfig, TaskExecutionResult } from "../scheduler/types";
 import { OutputHandler, OutputPayload, buildPayload } from "./interfaces";
 import { SNSPublisher } from "./SNSPublisher";
 import { WebhookPublisher } from "./WebhookPublisher";
+import { SlackPublisher } from "./SlackPublisher";
 import { logger } from "../utils";
 
 export class OutputRouter {
@@ -10,6 +11,7 @@ export class OutputRouter {
   constructor() {
     this.registerHandler(new SNSPublisher());
     this.registerHandler(new WebhookPublisher());
+    this.registerHandler(new SlackPublisher());
   }
 
   registerHandler(handler: OutputHandler): void {
