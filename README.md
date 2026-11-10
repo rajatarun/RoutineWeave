@@ -156,7 +156,7 @@ docs/          # Architecture, integrations, security
 Production requires an AWS account. Minimal path:
 
 1. Store Gemini key in Secrets Manager as `gemini/api_key` with JSON `{"key":"..."}`.
-2. Configure GitHub Actions OIDC deploy role **or** run `sam deploy` locally (see [docs/architecture.md](docs/architecture.md)).
+2. Configure GitHub Actions secrets/variables **or** run `sam deploy` locally — see [docs/DEPLOY_CONFIG.md](docs/DEPLOY_CONFIG.md) and [docs/architecture.md](docs/architecture.md).
 3. Confirm the SNS email subscription for your notification address.
 4. Call the API Gateway `ApiUrl` to manage tasks.
 

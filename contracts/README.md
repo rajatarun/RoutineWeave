@@ -11,8 +11,8 @@ consumer repository, keeping the `version` string in step.
 
 ### Why a copy at all
 
-The shared `OBSERVATORY_METRICS` DynamoDB table (provisioned by the
-`tarun-teamweave-shared` stack) has **many writers in two languages** and
+The shared `OBSERVATORY_METRICS` DynamoDB table (provisioned by your
+shared observability CloudFormation stack) has **many writers in two languages** and
 **several dashboard readers**, none of which can see each other's source. The
 item shape is therefore a cross-repository interface. It is pinned in one place
 rather than in any single consumer, and each consumer vendors a copy so its own
