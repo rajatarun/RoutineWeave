@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
   SAM_STACK_NAME: routineweave-${{ github.event.inputs.environment || 'production' }}
   ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
   NODE_VERSION: "20"
@@ -105,7 +105,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::239571291755:role/teamweave-github-actions-sam-deployer
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: routineweave-deploy-${{ github.run_id }}
 
@@ -122,7 +122,7 @@ jobs:
         id: shared-observatory
         run: |
           STACK_OUTPUTS=$(aws cloudformation describe-stacks \
-            --stack-name tarun-teamweave-shared \
+            --stack-name ${{ vars.SHARED_OBSERVATORY_STACK_NAME }} \
             --region ${{ env.AWS_REGION }} \
             --query 'Stacks[0].Outputs' \
             --output json)
@@ -150,6 +150,7 @@ jobs:
               LogLevel=info \
               ObservatoryMetricsTableName=${{ steps.shared-observatory.outputs.table-name }} \
               ObservatoryMetricsTableArn=${{ steps.shared-observatory.outputs.table-arn }} \
+              NotificationSubscriberEmail=${{ secrets.SNS_NOTIFICATION_EMAIL }} \
             --tags \
               Project=RoutineWeave \
               Environment=${{ env.ENVIRONMENT }} \
