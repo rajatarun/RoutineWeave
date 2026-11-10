@@ -1,0 +1,11 @@
+{
+  "task_name": "example_hello",
+  "schedule": "0 9 * * 1",
+  "prompt": "Today is {{current_date}}. Write one motivational sentence for developers shipping scheduled AI workflows.",
+  "model": "gemini-3.5-flash-lite",
+  "grounding": false,
+  "enabled": true,
+  "output": {
+    "type": "sns"
+  }
+}

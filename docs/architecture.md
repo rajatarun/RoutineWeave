@@ -118,7 +118,7 @@ DELETE /tasks/{name}  →  API Lambda  →  S3TaskStore.delete()  →  S3 (Objec
 |----------|------|---------|
 | `routineweave-tasks-{env}-{acct}` | S3 Bucket | Versioned task store; EventBridge notifications enabled |
 | `routineweave-notifications-{env}` | SNS Topic | Delivers task results by email |
-| `EmailSubscription` | SNS Subscription | `rajatarun12@gmail.com` (requires one-time confirmation) |
+| `EmailSubscription` | SNS Subscription | Deploy-time email parameter (requires one-time confirmation) |
 | `routineweave-scheduler-{env}` | Lambda | Executes a single task: render → Gemini → SNS |
 | `routineweave-registrar-{env}` | Lambda | Manages per-task EventBridge rules in response to S3 events |
 | `routineweave-api-{env}` | Lambda | HTTP CRUD API for task definitions |
@@ -215,7 +215,7 @@ push to main / manual trigger
   ├─ npm run build
   │
   ├─ aws-actions/configure-aws-credentials (OIDC)
-  │    role: arn:aws:iam::239571291755:role/teamweave-github-actions-sam-deployer
+  │    role: <your-github-actions-oidc-deploy-role-arn>
   │
   ├─ sam build --template aws/template.yaml   (timeout: 5 min)
   └─ sam deploy --resolve-s3
