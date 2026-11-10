@@ -19,7 +19,7 @@ RoutineWeave is for developers and operators who want recurring Gemini-powered w
 Verified on Node.js 20:
 
 ```bash
-git clone https://github.com/<owner>/RoutineWeave.git
+git clone https://github.com/rajatarun/RoutineWeave.git
 cd RoutineWeave
 npm install
 npm run typecheck
