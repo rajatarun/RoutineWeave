@@ -3,11 +3,13 @@ import { GeminiClient } from "./GeminiClient";
 import { PromptRenderer } from "./PromptRenderer";
 import { FlowTriggerClient } from "./FlowTriggerClient";
 import { OpenAICompatClient } from "./OpenAICompatClient";
+import { LocalHistoryEntry, LocalHistoryStore } from "../storage/LocalHistoryStore";
 import { logger } from "../utils";
 
 export interface ExecutionEngineOptions {
   flowTriggerClient?: FlowTriggerClient;
   openAICompatClient?: OpenAICompatClient;
+  historyStore?: LocalHistoryStore;
 }
 
 export class ExecutionEngine {
@@ -15,6 +17,7 @@ export class ExecutionEngine {
   private renderer: PromptRenderer;
   private flowTriggerClient: FlowTriggerClient;
   private openAICompatClient: OpenAICompatClient;
+  private historyStore?: LocalHistoryStore;
 
   constructor(
     gemini: GeminiClient,
@@ -25,6 +28,7 @@ export class ExecutionEngine {
     this.renderer = renderer;
     this.flowTriggerClient = options.flowTriggerClient ?? new FlowTriggerClient();
     this.openAICompatClient = options.openAICompatClient ?? new OpenAICompatClient();
+    this.historyStore = options.historyStore;
   }
 
   async execute(task: TaskDefinition): Promise<TaskExecutionResult> {
@@ -65,6 +69,16 @@ export class ExecutionEngine {
           status: dispatchResponse.status,
         });
 
+        this.recordHistory({
+          taskId: task.task_name,
+          executionMode: "flow_trigger",
+          status: "success",
+          latencyMs: duration_ms,
+          timestamp,
+          triggerId: dispatchResponse.triggerId,
+          flowId: dispatchResponse.flowId,
+        });
+
         return {
           task_name: task.task_name,
           timestamp,
@@ -94,8 +108,9 @@ export class ExecutionEngine {
         promptLength: renderedPrompt.length,
       });
 
+      const provider = task.provider ?? "gemini";
       const response =
-        task.provider === "openai_compat"
+        provider === "openai_compat"
           ? await this.withTimeout(
               this.openAICompatClient.generate({
                 model: task.model,
@@ -123,10 +138,20 @@ export class ExecutionEngine {
 
       logger.info(`Task ${task.task_name} completed`, {
         duration_ms,
-        provider: task.provider ?? "gemini",
+        provider,
         grounding: response.groundingUsed,
         promptTokens: response.promptTokens,
         outputTokens: response.outputTokens,
+      });
+
+      this.recordHistory({
+        taskId: task.task_name,
+        executionMode: "llm",
+        status: "success",
+        latencyMs: duration_ms,
+        timestamp,
+        provider,
+        model: task.model,
       });
 
       return {
@@ -142,6 +167,18 @@ export class ExecutionEngine {
 
       logger.error(`Task ${task.task_name} failed`, { error: message, duration_ms });
 
+      this.recordHistory({
+        taskId: task.task_name,
+        executionMode: mode,
+        status: "error",
+        latencyMs: duration_ms,
+        timestamp,
+        flowId: mode === "flow_trigger" ? task.flowTrigger?.flowId : undefined,
+        provider: mode === "llm" ? (task.provider ?? "gemini") : undefined,
+        model: mode === "llm" ? task.model : undefined,
+        error: message,
+      });
+
       return {
         task_name: task.task_name,
         timestamp,
@@ -149,6 +186,20 @@ export class ExecutionEngine {
         error: message,
         duration_ms,
       };
+    }
+  }
+
+  private recordHistory(entry: LocalHistoryEntry): void {
+    if (!this.historyStore) {
+      return;
+    }
+    try {
+      this.historyStore.recordRun(entry);
+    } catch (err) {
+      logger.warn("Failed to record execution history entry", {
+        taskId: entry.taskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
