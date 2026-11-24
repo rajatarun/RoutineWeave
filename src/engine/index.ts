@@ -24,4 +24,13 @@ export type {
   WebhookPolicyGuardOptions,
   WebhookPolicyDecision,
 } from "./WebhookPolicyGuard";
+export {
+  exportRoutineBundle,
+  importRoutineBundle,
+} from "./RoutineBundleSerializer";
+export type {
+  RoutineDefinition,
+  RoutineBundle,
+  ExportRoutineBundleOptions,
+} from "./RoutineBundleSerializer";
 export type { GeminiRequest, GeminiResponse } from "./GeminiClient";

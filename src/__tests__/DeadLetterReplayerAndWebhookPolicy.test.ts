@@ -56,6 +56,38 @@ describe("WebhookPolicyGuard", () => {
     expect(strictGuard.validateUrl("https://bad.weave.local/v1").allowed).toBe(false);
     expect(strictGuard.validateUrl("https://other.example.com/v1").allowed).toBe(false);
   });
+
+  it("blocks IPv4-mapped IPv6, unspecified addresses, and numeric/hex/octal IPv4 SSRF vectors", () => {
+    const guard = new WebhookPolicyGuard();
+    const strictGuard = new WebhookPolicyGuard({ allowLocalhostHttp: false });
+
+    const ssrfVectors = [
+      "http://[::ffff:169.254.169.254]/latest/meta-data/",
+      "https://[::ffff:169.254.169.254]/latest/meta-data/",
+      "http://[::ffff:a9fe:a9fe]/latest/meta-data/",
+      "https://[::ffff:a9fe:a9fe]/",
+      "http://[::ffff:0.0.0.0]/",
+      "http://0.0.0.0/",
+      "https://0.0.0.0/",
+      "http://[::]/",
+      "https://[::]/",
+      "http://2852039166/",
+      "https://2852039166/",
+      "http://0xa9fea9fe/",
+      "https://0xa9fea9fe/",
+      "http://0251.0376.0251.0376/",
+      "https://0251.0376.0251.0376/",
+    ];
+
+    for (const url of ssrfVectors) {
+      const decision = guard.validateUrl(url);
+      expect(decision.allowed).toBe(false);
+    }
+
+    // IPv4-mapped loopback must be blocked when allowLocalhostHttp=false
+    expect(strictGuard.validateUrl("http://[::ffff:127.0.0.1]/hook").allowed).toBe(false);
+    expect(strictGuard.validateUrl("http://[::ffff:7f00:1]/hook").allowed).toBe(false);
+  });
 });
 
 describe("FlowTriggerClient with WebhookPolicyGuard", () => {
