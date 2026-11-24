@@ -19,4 +19,9 @@ export type {
   OpenAICompatRequest,
   OpenAICompatResponse,
 } from "./OpenAICompatClient";
+export { WebhookPolicyGuard, WebhookPolicyError } from "./WebhookPolicyGuard";
+export type {
+  WebhookPolicyGuardOptions,
+  WebhookPolicyDecision,
+} from "./WebhookPolicyGuard";
 export type { GeminiRequest, GeminiResponse } from "./GeminiClient";

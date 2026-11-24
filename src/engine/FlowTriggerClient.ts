@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { FlowTriggerConfig } from "../scheduler/types";
 import { logger, withRetry } from "../utils";
+import { WebhookPolicyError, WebhookPolicyGuard } from "./WebhookPolicyGuard";
 
 export interface WeaveTriggerV1Payload {
   schema: "weave-trigger-v1";
@@ -47,6 +48,7 @@ export interface FlowTriggerClientOptions {
   defaultMaxRetries?: number;
   defaultRetryBaseDelayMs?: number;
   signingSecret?: string;
+  policyGuard?: WebhookPolicyGuard;
 }
 
 /**
@@ -82,16 +84,33 @@ export class FlowTriggerClient {
   private readonly defaultMaxRetries: number;
   private readonly defaultRetryBaseDelayMs: number;
   private readonly signingSecret?: string;
+  private readonly policyGuard?: WebhookPolicyGuard;
 
   constructor(options: FlowTriggerClientOptions = {}) {
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000;
     this.defaultMaxRetries = options.defaultMaxRetries ?? 2;
     this.defaultRetryBaseDelayMs = options.defaultRetryBaseDelayMs ?? 1000;
     this.signingSecret = options.signingSecret;
+    this.policyGuard = options.policyGuard;
   }
 
   async dispatch(request: FlowTriggerRequest): Promise<FlowTriggerResponse> {
     const { config, taskId } = request;
+
+    if (this.policyGuard) {
+      const decision = this.policyGuard.validateUrl(config.endpointUrl);
+      if (!decision.allowed) {
+        const reason = decision.reason ?? "Blocked by webhook policy";
+        logger.warn("Blocked outbound flow trigger URL by WebhookPolicyGuard", {
+          taskId,
+          flowId: config.flowId,
+          endpointUrl: config.endpointUrl,
+          reason,
+        });
+        throw new WebhookPolicyError(config.endpointUrl, reason);
+      }
+    }
+
     const triggerId = request.triggerId ?? crypto.randomUUID();
     const firedAt = request.firedAt ?? new Date().toISOString();
     const timeoutMs = config.timeoutMs ?? this.defaultTimeoutMs;

@@ -14,3 +14,10 @@ export type {
   DeadLetterInput,
   ListDeadLettersOptions,
 } from "./LocalDeadLetterStore";
+export { DeadLetterReplayer } from "./DeadLetterReplayer";
+export type {
+  DeadLetterReplayerOptions,
+  ReplayPendingOptions,
+  DeadLetterReplayResult,
+  DeadLetterReplaySummary,
+} from "./DeadLetterReplayer";
