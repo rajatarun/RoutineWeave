@@ -8,3 +8,9 @@ export type {
   RunStats,
   RunStatus,
 } from "./LocalHistoryStore";
+export { LocalDeadLetterStore } from "./LocalDeadLetterStore";
+export type {
+  DeadLetterEntry,
+  DeadLetterInput,
+  ListDeadLettersOptions,
+} from "./LocalDeadLetterStore";

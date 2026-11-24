@@ -1,15 +1,18 @@
+import crypto from "crypto";
 import { TaskDefinition, TaskExecutionResult } from "../scheduler/types";
 import { GeminiClient } from "./GeminiClient";
 import { PromptRenderer } from "./PromptRenderer";
 import { FlowTriggerClient } from "./FlowTriggerClient";
 import { OpenAICompatClient } from "./OpenAICompatClient";
 import { LocalHistoryEntry, LocalHistoryStore } from "../storage/LocalHistoryStore";
+import { DeadLetterInput, LocalDeadLetterStore } from "../storage/LocalDeadLetterStore";
 import { logger } from "../utils";
 
 export interface ExecutionEngineOptions {
   flowTriggerClient?: FlowTriggerClient;
   openAICompatClient?: OpenAICompatClient;
   historyStore?: LocalHistoryStore;
+  deadLetterStore?: LocalDeadLetterStore;
 }
 
 export class ExecutionEngine {
@@ -18,6 +21,7 @@ export class ExecutionEngine {
   private flowTriggerClient: FlowTriggerClient;
   private openAICompatClient: OpenAICompatClient;
   private historyStore?: LocalHistoryStore;
+  private deadLetterStore?: LocalDeadLetterStore;
 
   constructor(
     gemini: GeminiClient,
@@ -29,6 +33,7 @@ export class ExecutionEngine {
     this.flowTriggerClient = options.flowTriggerClient ?? new FlowTriggerClient();
     this.openAICompatClient = options.openAICompatClient ?? new OpenAICompatClient();
     this.historyStore = options.historyStore;
+    this.deadLetterStore = options.deadLetterStore;
   }
 
   async execute(task: TaskDefinition): Promise<TaskExecutionResult> {
@@ -179,6 +184,33 @@ export class ExecutionEngine {
         error: message,
       });
 
+      this.enqueueDeadLetter({
+        id: crypto.randomUUID(),
+        taskId: task.task_name,
+        flowId: mode === "flow_trigger" ? task.flowTrigger?.flowId : undefined,
+        payload:
+          mode === "flow_trigger"
+            ? {
+                executionMode: "flow_trigger",
+                endpointUrl: task.flowTrigger?.endpointUrl,
+                flowId: task.flowTrigger?.flowId,
+                inputs: {
+                  ...(task.input ?? {}),
+                  ...(task.flowTrigger?.inputs ?? {}),
+                },
+              }
+            : {
+                executionMode: "llm",
+                provider: task.provider ?? "gemini",
+                model: task.model,
+                prompt: task.prompt,
+                variables: task.variables,
+                input: task.input,
+              },
+        error: message,
+        failedAt: new Date().toISOString(),
+      });
+
       return {
         task_name: task.task_name,
         timestamp,
@@ -197,6 +229,20 @@ export class ExecutionEngine {
       this.historyStore.recordRun(entry);
     } catch (err) {
       logger.warn("Failed to record execution history entry", {
+        taskId: entry.taskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private enqueueDeadLetter(entry: DeadLetterInput): void {
+    if (!this.deadLetterStore) {
+      return;
+    }
+    try {
+      this.deadLetterStore.enqueue(entry);
+    } catch (err) {
+      logger.warn("Failed to enqueue dead-letter entry", {
         taskId: entry.taskId,
         error: err instanceof Error ? err.message : String(err),
       });

@@ -46,17 +46,48 @@ export interface FlowTriggerClientOptions {
   defaultTimeoutMs?: number;
   defaultMaxRetries?: number;
   defaultRetryBaseDelayMs?: number;
+  signingSecret?: string;
+}
+
+/**
+ * Computes an HMAC-SHA256 webhook signature in the format `sha256=<hex>`.
+ */
+function signWebhookBody(body: string, secret: string): string {
+  const digest = crypto.createHmac("sha256", secret).update(body, "utf8").digest("hex");
+  return `sha256=${digest}`;
+}
+
+/**
+ * Verifies an `X-Weave-Signature` header (`sha256=<hex>`) against a serialized
+ * request body using constant-time comparison.
+ */
+export function verifyWebhookSignature(body: string, signature: string, secret: string): boolean {
+  if (!secret || !signature || !signature.startsWith("sha256=")) {
+    return false;
+  }
+
+  const expected = signWebhookBody(body, secret);
+  const sigBuf = Buffer.from(signature, "utf8");
+  const expectedBuf = Buffer.from(expected, "utf8");
+
+  if (sigBuf.length !== expectedBuf.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(sigBuf, expectedBuf);
 }
 
 export class FlowTriggerClient {
   private readonly defaultTimeoutMs: number;
   private readonly defaultMaxRetries: number;
   private readonly defaultRetryBaseDelayMs: number;
+  private readonly signingSecret?: string;
 
   constructor(options: FlowTriggerClientOptions = {}) {
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000;
     this.defaultMaxRetries = options.defaultMaxRetries ?? 2;
     this.defaultRetryBaseDelayMs = options.defaultRetryBaseDelayMs ?? 1000;
+    this.signingSecret = options.signingSecret;
   }
 
   async dispatch(request: FlowTriggerRequest): Promise<FlowTriggerResponse> {
@@ -95,12 +126,18 @@ export class FlowTriggerClient {
       inputs,
     };
 
+    const serializedBody = JSON.stringify(payload);
+    if (this.signingSecret) {
+      headers["X-Weave-Signature"] = signWebhookBody(serializedBody, this.signingSecret);
+    }
+
     logger.info("Dispatching weave-trigger-v1 flow trigger", {
       taskId,
       flowId: config.flowId,
       triggerId,
       endpointUrl: config.endpointUrl,
       hasAuth: Boolean(config.authTokenEnv),
+      hasSignature: Boolean(this.signingSecret),
     });
 
     return withRetry(
@@ -112,7 +149,7 @@ export class FlowTriggerClient {
           const response = await fetch(config.endpointUrl, {
             method: "POST",
             headers,
-            body: JSON.stringify(payload),
+            body: serializedBody,
             signal: controller.signal,
           });
 
